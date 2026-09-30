@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<web-app xmlns="https://jakarta.ee/xml/ns/jakartaee"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="https://jakarta.ee/xml/ns/jakartaee https://jakarta.ee/xml/ns/jakartaee/web-app_6_0.xsd"
+         version="6.0">
+
+  <display-name>Self-Service VM &amp; Pod Provisioning Portal</display-name>
+
+  <!-- Keeps MongoDB in step with OpenStack/Kubernetes. -->
+  <listener>
+    <listener-class>com.portal.listener.SyncWorkerListener</listener-class>
+  </listener>
+
+  <!-- ===== Authentication ===== -->
+  <servlet>
+    <servlet-name>LoginServlet</servlet-name>
+    <servlet-class>com.portal.servlet.LoginServlet</servlet-class>
+  </servlet>
+  <servlet-mapping>
+    <servlet-name>LoginServlet</servlet-name>
+    <url-pattern>/login</url-pattern>
+  </servlet-mapping>
+
+  <servlet>
+    <servlet-name>RegisterServlet</servlet-name>
+    <servlet-class>com.portal.servlet.RegisterServlet</servlet-class>
+  </servlet>
+  <servlet-mapping>
+    <servlet-name>RegisterServlet</servlet-name>
+    <url-pattern>/register</url-pattern>
+  </servlet-mapping>
+
+  <servlet>
+    <servlet-name>LogoutServlet</servlet-name>
+    <servlet-class>com.portal.servlet.LogoutServlet</servlet-class>
+  </servlet>
+  <servlet-mapping>
+    <servlet-name>LogoutServlet</servlet-name>
+    <url-pattern>/logout</url-pattern>
+  </servlet-mapping>
+
+  <!-- ===== Virtual Machines ===== -->
+  <servlet>
+    <servlet-name>VmCreateServlet</servlet-name>
+    <servlet-class>com.portal.servlet.VmCreateServlet</servlet-class>
+  </servlet>
+  <servlet-mapping>
+    <servlet-name>VmCreateServlet</servlet-name>
+    <url-pattern>/vm/create</url-pattern>
+  </servlet-mapping>
+
+  <servlet>
+    <servlet-name>VmListServlet</servlet-name>
+    <servlet-class>com.portal.servlet.VmListServlet</servlet-class>
+  </servlet>
+  <servlet-mapping>
+    <servlet-name>VmListServlet</servlet-name>
+    <url-pattern>/vm/list</url-pattern>
+  </servlet-mapping>
+
+  <servlet>
+    <servlet-name>VmDetailServlet</servlet-name>
+    <servlet-class>com.portal.servlet.VmDetailServlet</servlet-class>
+  </servlet>
+  <servlet-mapping>
+    <servlet-name>VmDetailServlet</servlet-name>
+    <url-pattern>/vm/details</url-pattern>
+  </servlet-mapping>
+
+  <servlet>
+    <servlet-name>VmActionServlet</servlet-name>
+    <servlet-class>com.portal.servlet.VmActionServlet</servlet-class>
+  </servlet>
+  <servlet-mapping>
+    <servlet-name>VmActionServlet</servlet-name>
+    <url-pattern>/vm/action</url-pattern>
+  </servlet-mapping>
+
+  <servlet>
+    <servlet-name>VmMetricsServlet</servlet-name>
+    <servlet-class>com.portal.servlet.VmMetricsServlet</servlet-class>
+  </servlet>
+  <servlet-mapping>
+    <servlet-name>VmMetricsServlet</servlet-name>
+    <url-pattern>/vm/metrics</url-pattern>
+  </servlet-mapping>
+
+  <!-- ===== Pods ===== -->
+  <servlet>
+    <servlet-name>PodCreateServlet</servlet-name>
+    <servlet-class>com.portal.servlet.PodCreateServlet</servlet-class>
+  </servlet>
+  <servlet-mapping>
+    <servlet-name>PodCreateServlet</servlet-name>
+    <url-pattern>/pod/create</url-pattern>
+  </servlet-mapping>
+
+  <servlet>
+    <servlet-name>PodListServlet</servlet-name>
+    <servlet-class>com.portal.servlet.PodListServlet</servlet-class>
+  </servlet>
+  <servlet-mapping>
+    <servlet-name>PodListServlet</servlet-name>
+    <url-pattern>/pod/list</url-pattern>
+  </servlet-mapping>
+
+  <servlet>
+    <servlet-name>PodDetailServlet</servlet-name>
+    <servlet-class>com.portal.servlet.PodDetailServlet</servlet-class>
+  </servlet>
+  <servlet-mapping>
+    <servlet-name>PodDetailServlet</servlet-name>
+    <url-pattern>/pod/details</url-pattern>
+  </servlet-mapping>
+
+  <servlet>
+    <servlet-name>PodActionServlet</servlet-name>
+    <servlet-class>com.portal.servlet.PodActionServlet</servlet-class>
+  </servlet>
+  <servlet-mapping>
+    <servlet-name>PodActionServlet</servlet-name>
+    <url-pattern>/pod/action</url-pattern>
+  </servlet-mapping>
+
+  <servlet>
+    <servlet-name>PodMetricsServlet</servlet-name>
+    <servlet-class>com.portal.servlet.PodMetricsServlet</servlet-class>
+  </servlet>
+  <servlet-mapping>
+    <servlet-name>PodMetricsServlet</servlet-name>
+    <url-pattern>/pod/metrics</url-pattern>
+  </servlet-mapping>
+
+  <servlet>
+    <servlet-name>PodLogsServlet</servlet-name>
+    <servlet-class>com.portal.servlet.PodLogsServlet</servlet-class>
+  </servlet>
+  <servlet-mapping>
+    <servlet-name>PodLogsServlet</servlet-name>
+    <url-pattern>/pod/logs</url-pattern>
+  </servlet-mapping>
+
+  <session-config>
+    <session-timeout>30</session-timeout>
+    <cookie-config>
+      <http-only>true</http-only>
+    </cookie-config>
+    <tracking-mode>COOKIE</tracking-mode>
+  </session-config>
+
+  <welcome-file-list>
+    <welcome-file>login.jsp</welcome-file>
+  </welcome-file-list>
+</web-app>

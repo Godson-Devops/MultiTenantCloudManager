@@ -1,0 +1,18 @@
+# Maven build output
+target/
+
+# Eclipse WTP server runtime
+.metadata/
+wtpwebapps/
+
+# IDE noise
+*.log
+*.tmp
+.idea/
+*.iml
+.classpath.bak
+.settings/org.eclipse.wst.server.core.prefs
+
+# OS noise
+.DS_Store
+Thumbs.db
