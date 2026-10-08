@@ -8,13 +8,13 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.Map;
 
-/** Creates a new user with a bcrypt-hashed password and default quotas. */
 public class RegisterServlet extends BaseServlet {
 
     private static final int MIN_PASSWORD_LENGTH = 8;
+    private static final int ATTEMPTS_PER_MINUTE = 5;
+    private static final long WINDOW_MILLIS = 60_000;
 
     private final UserDao userDao = new UserDao();
 
@@ -22,7 +22,8 @@ public class RegisterServlet extends BaseServlet {
     protected void doPost(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
 
-        if (!RateLimiter.tryAcquire("register:" + request.getRemoteAddr(), 5, 60_000)) {
+        if (!RateLimiter.tryAcquire(
+                "register:" + request.getRemoteAddr(), ATTEMPTS_PER_MINUTE, WINDOW_MILLIS)) {
             sendError(response, TOO_MANY_REQUESTS,
                     "Too many registrations, please wait a minute");
             return;
@@ -40,15 +41,13 @@ public class RegisterServlet extends BaseServlet {
                     "Password must be at least " + MIN_PASSWORD_LENGTH + " characters");
             return;
         }
-
         if (!userDao.createUser(userId, password)) {
             sendError(response, HttpServletResponse.SC_CONFLICT, "User id already taken");
             return;
         }
 
-        Map<String, Object> body = new HashMap<>();
-        body.put("userId", userId);
-        body.put("message", "Registration successful, please log in");
-        sendOk(response, body);
+        sendOk(response, Map.of(
+                "userId", userId,
+                "message", "Registration successful, please log in"));
     }
 }

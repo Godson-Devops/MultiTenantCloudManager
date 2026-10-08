@@ -1,63 +1,29 @@
 package com.portal.util;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+
+import java.io.IOException;
 import java.util.Map;
 
-/** Helpers shared by the servlets for JSON responses and request parsing. */
 public final class WebUtil {
+
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private WebUtil() {
     }
 
-    /**
-     * Maps an OpenStack Nova server status onto the portal's status vocabulary.
-     * See the mapping table in the spec: BUILD->creating, ACTIVE->running,
-     * SHUTOFF->stopped, ERROR->error.
-     */
-    public static String mapOpenStackStatus(String raw) {
-        if (raw == null) {
-            return "error";
-        }
-        return switch (raw.toUpperCase()) {
-            case "BUILD" -> "creating";
-            case "ACTIVE" -> "running";
-            case "SHUTOFF" -> "stopped";
-            case "ERROR" -> "error";
-            // REBUILD / DELETED / PAUSED / SUSPENDED and anything else are not
-            // states the UI knows about; treat them as errors rather than
-            // inventing new vocabulary the JSPs would not render.
-            default -> "error";
-        };
+    public static String param(HttpServletRequest req, String name) {
+        String value = req.getParameter(name);
+        return (value == null || value.isBlank()) ? null : value.trim();
     }
 
-    /** Maps a Kubernetes pod phase onto the portal's status vocabulary. */
-    public static String mapPodPhase(String raw) {
-        if (raw == null) {
-            return "creating";
-        }
-        return switch (raw) {
-            case "Pending" -> "creating";
-            case "Running" -> "running";
-            case "Failed" -> "error";
-            case "Succeeded" -> "stopped";
-            default -> "creating";
-        };
-    }
-
-    /** Extracts a single string parameter, returning null when absent/blank. */
-    public static String param(jakarta.servlet.http.HttpServletRequest req, String name) {
-        String v = req.getParameter(name);
-        return (v == null || v.isBlank()) ? null : v.trim();
-    }
-
-    /** Writes a JSON body with the given status code. */
-    public static void writeJson(jakarta.servlet.http.HttpServletResponse resp,
-                                 int status,
-                                 Map<String, Object> body) throws java.io.IOException {
+    public static void writeJson(HttpServletResponse resp, int status, Map<String, Object> body)
+            throws IOException {
         resp.setStatus(status);
         resp.setContentType("application/json;charset=UTF-8");
         resp.setHeader("Cache-Control", "no-store");
-        com.fasterxml.jackson.databind.ObjectMapper mapper =
-                new com.fasterxml.jackson.databind.ObjectMapper();
-        resp.getWriter().write(mapper.writeValueAsString(body));
+        resp.getWriter().write(MAPPER.writeValueAsString(body));
     }
 }

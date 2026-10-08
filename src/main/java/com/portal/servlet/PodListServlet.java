@@ -8,12 +8,10 @@ import jakarta.servlet.http.HttpServletResponse;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Lists the caller's pods. MongoDB only, no live Kubernetes call. */
 public class PodListServlet extends BaseServlet {
 
     private final PodDao podDao = new PodDao();
@@ -25,10 +23,10 @@ public class PodListServlet extends BaseServlet {
         if (!requireSession(request, response)) {
             return;
         }
-        String userId = currentUser(request);
+        List<PodDetails> pods = podDao.findByUser(currentUser(request));
 
-        List<Map<String, Object>> rows = new ArrayList<>();
-        for (PodDetails pod : podDao.findByUser(userId)) {
+        List<Map<String, Object>> rows = new ArrayList<>(pods.size());
+        for (PodDetails pod : pods) {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("podId", pod.getPodId());
             row.put("podName", pod.getPodName());
@@ -39,9 +37,6 @@ public class PodListServlet extends BaseServlet {
             row.put("nodeName", pod.getNodeName());
             rows.add(row);
         }
-
-        Map<String, Object> body = new HashMap<>();
-        body.put("pods", rows);
-        sendOk(response, body);
+        sendOk(response, Map.of("pods", rows));
     }
 }

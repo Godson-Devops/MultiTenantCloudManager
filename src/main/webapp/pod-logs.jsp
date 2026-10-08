@@ -12,7 +12,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Pod Logs &middot; Cloud Provisioning Portal</title>
-  <link rel="stylesheet" href="css/portal.css">
+  <link rel="stylesheet" href="css/portal.css?v=white1">
 </head>
 <body>
 <header class="topbar">
@@ -31,19 +31,26 @@
 
 <main>
   <div class="card">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-      <h2 style="margin:0">POD LOGS <span id="state" style="color:var(--muted);font-weight:400"></span></h2>
-      <div style="display:flex;gap:8px;align-items:center">
-        <a id="backLink" href="pod-dashboard.jsp"><button class="secondary">BACK</button></a>
+    <div class="card-head">
+      <div class="titles">
+        <h2>POD LOGS <span id="state" class="stream-state">idle</span></h2>
+        <span class="sub">Live container output streamed over SSE</span>
+      </div>
+      <div class="action-row">
+        <a id="backLink" class="btn secondary" href="pod-dashboard.jsp">BACK</a>
         <button id="stopBtn" class="danger" disabled>STOP STREAMING</button>
       </div>
     </div>
 
     <div id="msg" class="msg hidden"></div>
 
+    <div class="log-toolbar">
+      <span class="hint">Tip: press START STREAMING to attach to the container&rsquo;s stdout.</span>
+    </div>
+
     <div class="log-viewer" id="logViewer">Press START STREAMING to begin.</div>
 
-    <div style="margin-top:14px">
+    <div class="action-row" style="margin-top:14px">
       <button id="startBtn">START STREAMING</button>
     </div>
   </div>
@@ -51,7 +58,7 @@
 
 <script src="js/portal.js"></script>
 <script>
-  const POD_ID = <%= podId == null ? "null" : "\"" + podId.replace("\"", "") + "\"" %>;
+  const POD_ID = <%= podId == null ? "null" : "\"" + podId.replace("\\", "\\\\").replace("\"", "\\\"").replace("<", "\\u003c") + "\"" %>;
   let source = null;
 
   if (POD_ID) {
@@ -65,14 +72,20 @@
     viewer.scrollTop = viewer.scrollHeight;
   }
 
+  function setState(text, cls) {
+    const el = document.getElementById('state');
+    el.textContent = text;
+    el.className = 'stream-state' + (cls ? ' ' + cls : '');
+  }
+
   function stop() {
     if (source) { source.close(); source = null; }
     document.getElementById('startBtn').disabled = false;
     document.getElementById('stopBtn').disabled = true;
-    document.getElementById('state').textContent = '(stopped)';
+    setState('stopped', 'off');
   }
 
-  document.getElementById('startBtn').addEventListener('click', () => {
+  document.getElementById('startBtn').addEventListener('click', function () {
     if (!POD_ID) {
       Portal.show('msg', 'No pod id supplied', 'err');
       return;
@@ -81,37 +94,37 @@
     document.getElementById('logViewer').textContent = '';
     document.getElementById('startBtn').disabled = true;
     document.getElementById('stopBtn').disabled = false;
-    document.getElementById('state').textContent = '(streaming)';
+    setState('streaming', 'live');
 
-    // The servlet holds the request open and streams the pod log as SSE.
-    // Log lines arrive as unnamed "data:" frames (onmessage); "open",
-    // "end" and "error" are named events.
     source = new EventSource('pod/logs?id=' + encodeURIComponent(POD_ID));
 
-    source.onmessage = (e) => append(e.data + '\n');
+    source.onmessage = function (e) { append(e.data + '\n'); };
 
-    source.addEventListener('open', (e) => append('--- ' + e.data + ' ---\n'));
-
-    source.addEventListener('end', () => {
-      document.getElementById('state').textContent = '(reconnecting)';
+    source.addEventListener('open', function (e) {
+      if (e.data != null) append('--- ' + e.data + ' ---\n');
     });
 
-    source.addEventListener('error', (e) => {
-      Portal.show('msg', e.data || 'The log stream failed.', 'err');
-      stop();
+    source.addEventListener('end', function () {
+      setState('reconnecting', 'wait');
     });
 
-    source.onerror = () => {
-      // EventSource reconnects automatically; only report if it stays down.
+    source.addEventListener('error', function (e) {
+      if (e.data != null) {
+        Portal.show('msg', e.data, 'err');
+        stop();
+        return;
+      }
       if (source && source.readyState === EventSource.CLOSED) {
         Portal.show('msg', 'The log stream ended.', 'err');
         stop();
+      } else if (source) {
+        setState('reconnecting', 'wait');
       }
-    };
+    });
   });
 
   document.getElementById('stopBtn').addEventListener('click', stop);
-  window.addEventListener('beforeunload', () => { if (source) source.close(); });
+  window.addEventListener('beforeunload', function () { if (source) source.close(); });
 </script>
 </body>
 </html>

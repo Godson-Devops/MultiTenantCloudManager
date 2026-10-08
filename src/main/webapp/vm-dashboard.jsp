@@ -11,7 +11,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>VM Dashboard &middot; Cloud Provisioning Portal</title>
-  <link rel="stylesheet" href="css/portal.css">
+  <link rel="stylesheet" href="css/portal.css?v=white1">
 </head>
 <body>
 <header class="topbar">
@@ -30,19 +30,23 @@
 
 <main>
   <div class="card">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-      <h2 style="margin:0">LIST OF VMS</h2>
-      <a href="vm-create.jsp"><button>CREATE VM</button></a>
+    <div class="card-head">
+      <div class="titles">
+        <h2>LIST OF VMS</h2>
+        <span class="sub">All virtual machines provisioned in your projects</span>
+      </div>
+      <a class="btn" href="vm-create.jsp">+ CREATE VM</a>
     </div>
 
     <div id="msg" class="msg hidden"></div>
 
+    <div class="table-shell">
     <table>
       <thead>
         <tr>
-          <th>LIST OF VM NAMES</th>
-          <th>VM STATUS</th>
-          <th>PROJECT_NAME</th>
+          <th>VM NAME</th>
+          <th>STATUS</th>
+          <th>PROJECT</th>
           <th>DETAILS</th>
         </tr>
       </thead>
@@ -50,6 +54,7 @@
         <tr><td colspan="4" class="empty">Loading...</td></tr>
       </tbody>
     </table>
+    </div>
   </div>
 </main>
 
@@ -72,14 +77,16 @@
       return;
     }
 
-    document.getElementById('vmBody').innerHTML = vms.map(vm => `
+    document.getElementById('vmBody').innerHTML = vms.map(function (vm) {
+      return `
       <tr>
         <td>\${Portal.esc(vm.vmName)}</td>
         <td>\${Portal.badge(vm.status)}</td>
         <td>\${Portal.esc(vm.projectName)}</td>
-        <td><a href="vm-details.jsp?id=\${encodeURIComponent(vm.vmId)}">View details</a></td>
+        <td><a class="link-pill" href="vm-details.jsp?id=\${encodeURIComponent(vm.vmId)}">View details</a></td>
       </tr>
-    `).join('');
+    `;
+    }).join('');
   }
 
   loadVms();

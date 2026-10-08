@@ -3,23 +3,20 @@ package com.portal.servlet;
 import com.portal.dao.VmDao;
 import com.portal.model.VmDetails;
 import com.portal.service.PrometheusService;
+import com.portal.service.ServiceRegistry;
 import com.portal.util.WebUtil;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
 import java.io.IOException;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Returns Prometheus series for a VM the caller owns, shaped for Chart.js.
- *
- * When Prometheus is down every series comes back empty and the response
- * carries an "error" flag, so the JSP renders "No data" rather than breaking.
- */
 public class VmMetricsServlet extends BaseServlet {
+
+    private static final String UNAVAILABLE = "metrics unavailable";
 
     private final VmDao vmDao = new VmDao();
 
@@ -43,33 +40,32 @@ public class VmMetricsServlet extends BaseServlet {
             return;
         }
 
-        Map<String, Object> body = new HashMap<>();
+        Map<String, Object> body = new LinkedHashMap<>();
         body.put("vmId", vmId);
 
         String vmIp = vm.getVmIp();
         if (vmIp == null || vmIp.isBlank()) {
-            body.put("error", "metrics unavailable");
+            body.put("error", UNAVAILABLE);
             body.put("reason", "VM has no private IP yet");
             sendOk(response, body);
             return;
         }
 
-        PrometheusService prometheus = com.portal.service.ServiceRegistry.prometheus();
+        PrometheusService prometheus = ServiceRegistry.prometheus();
         List<double[]> cpu = prometheus.queryVmCpu(vmIp);
         List<double[]> memory = prometheus.queryVmMemory(vmIp);
         List<double[]> disk = prometheus.queryVmDisk(vmIp);
         List<double[]> network = prometheus.queryVmNetwork(vmIp);
-        List<double[]> up = prometheus.queryVmUp(vmIp);
 
-        body.put("instance", vmIp + ":9100");
+        body.put("instance", prometheus.nodeExporterInstance(vmIp));
         body.put("cpu", cpu);
         body.put("memory", memory);
         body.put("disk", disk);
         body.put("network", network);
-        body.put("up", up);
+        body.put("up", prometheus.queryVmUp(vmIp));
 
         if (cpu.isEmpty() && memory.isEmpty() && disk.isEmpty() && network.isEmpty()) {
-            body.put("error", "metrics unavailable");
+            body.put("error", UNAVAILABLE);
         }
         sendOk(response, body);
     }

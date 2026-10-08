@@ -2,43 +2,35 @@ package com.portal.util;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Reads configuration from a classpath "portal.properties", falling back to
- * environment variables and then to a built-in default.
- *
- * Secrets (OpenStack / Kubernetes / Mongo passwords) are read from the
- * environment first so they never need to be committed to source control.
- */
 public final class AppConfig {
 
+    private static final String FILE_NAME = "portal.properties";
+
     private static final Properties PROPS = new Properties();
-    private static boolean loaded = false;
+
+    private static final Map<String, String> ENV_NAMES = new ConcurrentHashMap<>();
+    private static volatile boolean loaded;
 
     private AppConfig() {
     }
 
     public static String get(String key, String defaultValue) {
         load();
-        String envKey = key.toUpperCase().replace('.', '_');
-        String env = System.getenv(envKey);
+        String env = System.getenv(envName(key));
         if (env != null && !env.isBlank()) {
             return env.trim();
         }
         String value = PROPS.getProperty(key);
-        if (value != null && !value.isBlank()) {
-            return value.trim();
-        }
-        return defaultValue;
+        return (value == null || value.isBlank()) ? defaultValue : value.trim();
     }
 
     public static int getInt(String key, int defaultValue) {
-        try {
-            return Integer.parseInt(get(key, String.valueOf(defaultValue)));
-        } catch (NumberFormatException e) {
-            return defaultValue;
-        }
+        return (int) getLong(key, defaultValue);
     }
 
     public static long getLong(String key, long defaultValue) {
@@ -49,16 +41,26 @@ public final class AppConfig {
         }
     }
 
+    private static String envName(String key) {
+        String cached = ENV_NAMES.get(key);
+        if (cached != null) {
+            return cached;
+        }
+        String name = key.toUpperCase(Locale.ROOT).replace('.', '_');
+        String raced = ENV_NAMES.putIfAbsent(key, name);
+        return raced == null ? name : raced;
+    }
+
     private static synchronized void load() {
         if (loaded) {
             return;
         }
-        try (InputStream in = AppConfig.class.getClassLoader().getResourceAsStream("portal.properties")) {
+        try (InputStream in = AppConfig.class.getClassLoader().getResourceAsStream(FILE_NAME)) {
             if (in != null) {
                 PROPS.load(in);
             }
         } catch (IOException e) {
-            // Non-fatal: defaults still apply.
+
         }
         loaded = true;
     }

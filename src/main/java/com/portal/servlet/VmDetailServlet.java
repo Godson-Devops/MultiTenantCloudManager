@@ -2,6 +2,7 @@ package com.portal.servlet;
 
 import com.portal.dao.VmDao;
 import com.portal.model.VmDetails;
+import com.portal.service.OpenStackService;
 import com.portal.service.ServiceRegistry;
 import com.portal.util.WebUtil;
 import jakarta.servlet.ServletException;
@@ -9,13 +10,9 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
 import java.io.IOException;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
-/**
- * Returns one VM's detail card, going live to OpenStack for fresh IPs while
- * still enforcing ownership against the database row.
- */
 public class VmDetailServlet extends BaseServlet {
 
     private final VmDao vmDao = new VmDao();
@@ -35,14 +32,12 @@ public class VmDetailServlet extends BaseServlet {
             return;
         }
 
-        // Scoped lookup: findByIdAndUser filters on both fields, so another
-        // user's VM simply is not found and we answer 403 below.
         VmDetails vm = vmDao.findByIdAndUser(vmId, userId);
         if (!requireOwner(vm == null ? null : vm.getUserId(), userId, response)) {
             return;
         }
 
-        Map<String, Object> body = new HashMap<>();
+        Map<String, Object> body = new LinkedHashMap<>();
         body.put("vmId", vm.getVmId());
         body.put("vmName", vm.getVmName());
         body.put("status", vm.getStatus());
@@ -53,17 +48,12 @@ public class VmDetailServlet extends BaseServlet {
         body.put("flavor", vm.getFlavor());
         body.put("image", vm.getImage());
 
-        // Refresh live values, but never fail the request over it: the cached
-        // row is still useful when OpenStack is unreachable.
         try {
-            var server = ServiceRegistry.openStack().refreshServer(vmId);
-            if (server == null) {
-                body.put("status", "error");
-            } else {
-                if (server.getStatus() != null) {
-                    body.put("status", WebUtil.mapOpenStackStatus(server.getStatus().name()));
-                }
-                String floating = ServiceRegistry.openStack().findFloatingIp(vmId, vm.getVmIp());
+            OpenStackService openStack = ServiceRegistry.openStack();
+            var server = openStack.refreshServer(vmId);
+            body.put("status", OpenStackService.statusOf(server));
+            if (server != null) {
+                String floating = openStack.findFloatingIp(vmId, vm.getVmIp());
                 if (floating != null) {
                     body.put("floatIp", floating);
                 }

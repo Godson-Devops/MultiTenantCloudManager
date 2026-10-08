@@ -7,14 +7,11 @@ public class PodDetails {
     private String podName;
     private String namespace;
     private String nodeName;
-    private String status;
+    private Status status = Status.CREATING;
     private int restartCount;
     private String podIp;
     private int podPort;
     private String image;
-
-    public PodDetails() {
-    }
 
     public String getPodId() {
         return podId;
@@ -56,11 +53,11 @@ public class PodDetails {
         this.nodeName = nodeName;
     }
 
-    public String getStatus() {
+    public Status getStatus() {
         return status;
     }
 
-    public void setStatus(String status) {
+    public void setStatus(Status status) {
         this.status = status;
     }
 

@@ -11,22 +11,18 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
 import java.io.IOException;
-import java.io.OutputStream;
 import java.io.OutputStreamWriter;
+import java.io.PipedInputStream;
+import java.io.PipedOutputStream;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 
-/**
- * Streams a pod's logs to the Live Logs Viewer as Server-Sent Events.
- *
- * The stream is bounded by a maximum duration and closed on client disconnect,
- * so it never pins a thread indefinitely across page reloads. The JSP
- * reconnects with EventSource, which is why a hard cap is safe here.
- */
 public class PodLogsServlet extends BaseServlet {
 
     private static final long DEFAULT_MAX_DURATION_MS = 60_000;
     private static final long POLL_INTERVAL_MS = 200;
+    private static final int BRIDGE_BUFFER_BYTES = 8192;
+    private static final int READ_BUFFER_BYTES = 4096;
 
     private final PodDao podDao = new PodDao();
 
@@ -57,11 +53,8 @@ public class PodLogsServlet extends BaseServlet {
 
         Writer writer = new OutputStreamWriter(response.getOutputStream(), StandardCharsets.UTF_8);
 
-        // A PipedOutputStream lets us forward Fabric8's line callbacks to the
-        // SSE writer; the 8KB buffer decouples the watch thread from a slow
-        // client rather than blocking it.
-        java.io.PipedOutputStream sink = new java.io.PipedOutputStream();
-        java.io.PipedInputStream source = new java.io.PipedInputStream(sink, 8192);
+        PipedOutputStream sink = new PipedOutputStream();
+        PipedInputStream source = new PipedInputStream(sink, BRIDGE_BUFFER_BYTES);
 
         LogWatch watch = null;
         try {
@@ -73,12 +66,9 @@ public class PodLogsServlet extends BaseServlet {
             long deadline = System.currentTimeMillis()
                     + AppConfig.getLong("pod.logs.max_duration_ms", DEFAULT_MAX_DURATION_MS);
 
-            byte[] buffer = new byte[4096];
+            byte[] buffer = new byte[READ_BUFFER_BYTES];
             while (System.currentTimeMillis() < deadline) {
-                // read() would block until Fabric8 produced a line, which
-                // never returns if the pod is quiet, so the deadline would
-                // never be reached. Poll available() instead and keep the
-                // connection alive with a periodic comment frame.
+
                 if (source.available() == 0) {
                     Thread.sleep(POLL_INTERVAL_MS);
                     writer.write(": keep-alive\n\n");
@@ -87,47 +77,33 @@ public class PodLogsServlet extends BaseServlet {
                 }
                 int read = source.read(buffer, 0, buffer.length);
                 if (read > 0) {
-                    // Prefix every line: SSE treats a bare newline as the end
-                    // of a frame, so multi-line chunks must be split by hand.
+
                     writer.write("data: "
                             + new String(buffer, 0, read, StandardCharsets.UTF_8)
-                                .replace("\r\n", "\n").replace("\n", "\ndata: "));
-                    writer.write("\n\n");
+                                .replace("\r\n", "\n").replace("\n", "\ndata: ")
+                            + "\n\n");
                     writer.flush();
                 }
             }
 
             sendEvent(writer, "end", "stream window elapsed, reconnecting");
         } catch (IOException e) {
-            // This is the normal client-disconnect path: the browser navigated
-            // away and the write to the closed socket failed.
+
             getServletContext().log("Log stream closed early for " + podId);
         } catch (InterruptedException e) {
-            // Container shutting down or the request thread recycled: restore
-            // the flag and stop streaming rather than swallowing it.
+
             Thread.currentThread().interrupt();
         } catch (RuntimeException e) {
             getServletContext().log("Log stream failed for " + podId, e);
             try {
-                // Fixed text, not e.getMessage(): the browser renders this
-                // inline and the provider message may describe internals.
+
                 sendEvent(writer, "error", "log stream failed");
             } catch (IOException ignored) {
-                // Client already gone; nothing left to report to.
+
             }
         } finally {
-            if (watch != null) {
-                try {
-                    watch.close();
-                } catch (RuntimeException ignored) {
-                    // Nothing useful to do while tearing down.
-                }
-            }
-            try {
-                source.close();
-            } catch (IOException ignored) {
-                // Nothing useful to do while tearing down.
-            }
+            close(watch);
+            closeQuietly(source);
         }
     }
 
@@ -135,5 +111,24 @@ public class PodLogsServlet extends BaseServlet {
         writer.write("event: " + event + "\n");
         writer.write("data: " + data.replace("\n", " ") + "\n\n");
         writer.flush();
+    }
+
+    private void close(LogWatch watch) {
+        if (watch == null) {
+            return;
+        }
+        try {
+            watch.close();
+        } catch (RuntimeException ignored) {
+
+        }
+    }
+
+    private void closeQuietly(PipedInputStream source) {
+        try {
+            source.close();
+        } catch (IOException ignored) {
+
+        }
     }
 }

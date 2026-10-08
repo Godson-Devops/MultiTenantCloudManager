@@ -12,7 +12,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>VM Details &middot; Cloud Provisioning Portal</title>
-  <link rel="stylesheet" href="css/portal.css">
+  <link rel="stylesheet" href="css/portal.css?v=white1">
 </head>
 <body>
 <header class="topbar">
@@ -31,9 +31,12 @@
 
 <main>
   <div class="card">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-      <h2 style="margin:0">VM DETAILS</h2>
-      <a href="vm-dashboard.jsp">Back to dashboard</a>
+    <div class="card-head">
+      <div class="titles">
+        <h2>VM DETAILS</h2>
+        <span class="sub">Live state and network info for this machine</span>
+      </div>
+      <a class="back-link" href="vm-dashboard.jsp">Back to dashboard</a>
     </div>
 
     <div id="msg" class="msg hidden"></div>
@@ -47,8 +50,8 @@
       <div><div class="metric-label">PROJECT</div><div id="projectName">&mdash;</div></div>
     </div>
 
-    <div style="margin-top:20px;display:flex;gap:8px;flex-wrap:wrap">
-      <a id="metricsLink" href="#"><button class="secondary">VIEW METRICS</button></a>
+    <div class="action-row" style="margin-top:20px">
+      <a id="metricsLink" class="btn secondary" href="#">VIEW METRICS</a>
       <button class="secondary" data-action="start">START</button>
       <button class="secondary" data-action="restart">RESTART</button>
       <button class="secondary" data-action="stop">STOP</button>
@@ -59,7 +62,7 @@
 
 <script src="js/portal.js"></script>
 <script>
-  const VM_ID = <%= vmId == null ? "null" : "\"" + vmId.replace("\"", "") + "\"" %>;
+  const VM_ID = <%= vmId == null ? "null" : "\"" + vmId.replace("\\", "\\\\").replace("\"", "\\\"").replace("<", "\\u003c").replace("\n", " ").replace("\r", " ") + "\"" %>;
 
   async function loadVm() {
     if (!VM_ID) {
@@ -85,8 +88,8 @@
       'vm-monitor.jsp?id=' + encodeURIComponent(VM_ID);
   }
 
-  document.querySelectorAll('button[data-action]').forEach(btn => {
-    btn.addEventListener('click', async () => {
+  document.querySelectorAll('button[data-action]').forEach(function (btn) {
+    btn.addEventListener('click', async function () {
       const action = btn.dataset.action;
       if (action === 'delete' && !confirm('Delete this VM? This cannot be undone.')) return;
 
@@ -105,7 +108,7 @@
         return;
       }
       Portal.show('msg', 'Action ' + action + ' submitted.', 'ok');
-      setTimeout(() => { btn.disabled = false; loadVm(); }, 1200);
+      setTimeout(function () { btn.disabled = false; loadVm(); }, 1200);
     });
   });
 

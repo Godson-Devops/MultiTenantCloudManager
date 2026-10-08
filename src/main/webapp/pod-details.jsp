@@ -12,7 +12,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Pod Details &middot; Cloud Provisioning Portal</title>
-  <link rel="stylesheet" href="css/portal.css">
+  <link rel="stylesheet" href="css/portal.css?v=white1">
 </head>
 <body>
 <header class="topbar">
@@ -31,9 +31,12 @@
 
 <main>
   <div class="card">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-      <h2 style="margin:0">POD DETAILS</h2>
-      <a href="pod-dashboard.jsp">Back to dashboard</a>
+    <div class="card-head">
+      <div class="titles">
+        <h2>POD DETAILS</h2>
+        <span class="sub">Live state and metadata for this container</span>
+      </div>
+      <a class="back-link" href="pod-dashboard.jsp">Back to dashboard</a>
     </div>
 
     <div id="msg" class="msg hidden"></div>
@@ -49,9 +52,9 @@
       <div><div class="metric-label">IMAGE</div><div id="image">&mdash;</div></div>
     </div>
 
-    <div style="margin-top:20px;display:flex;gap:8px;flex-wrap:wrap">
-      <a id="monitorLink" href="#"><button class="secondary">VIEW METRICS</button></a>
-      <a id="logsLink" href="#"><button class="secondary">VIEW LOGS</button></a>
+    <div class="action-row" style="margin-top:20px">
+      <a id="monitorLink" class="btn secondary" href="#">VIEW METRICS</a>
+      <a id="logsLink" class="btn secondary" href="#">VIEW LOGS</a>
       <button class="secondary" data-action="start">START</button>
       <button class="secondary" data-action="restart">RESTART</button>
       <button class="secondary" data-action="stop">STOP</button>
@@ -62,7 +65,7 @@
 
 <script src="js/portal.js"></script>
 <script>
-  const POD_ID = <%= podId == null ? "null" : "\"" + podId.replace("\"", "") + "\"" %>;
+  const POD_ID = <%= podId == null ? "null" : "\"" + podId.replace("\\", "\\\\").replace("\"", "\\\"").replace("<", "\\u003c").replace("\n", " ").replace("\r", " ") + "\"" %>;
 
   async function loadPod() {
     if (!POD_ID) {
@@ -92,8 +95,8 @@
       'pod-logs.jsp?id=' + encodeURIComponent(POD_ID);
   }
 
-  document.querySelectorAll('button[data-action]').forEach(btn => {
-    btn.addEventListener('click', async () => {
+  document.querySelectorAll('button[data-action]').forEach(function (btn) {
+    btn.addEventListener('click', async function () {
       const action = btn.dataset.action;
       if (action === 'delete' && !confirm('Delete this pod? This cannot be undone.')) return;
 
@@ -112,7 +115,7 @@
         return;
       }
       Portal.show('msg', 'Action ' + action + ' submitted.', 'ok');
-      setTimeout(() => { btn.disabled = false; loadPod(); }, 1200);
+      setTimeout(function () { btn.disabled = false; loadPod(); }, 1200);
     });
   });
 

@@ -11,7 +11,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Create Pod &middot; Cloud Provisioning Portal</title>
-  <link rel="stylesheet" href="css/portal.css">
+  <link rel="stylesheet" href="css/portal.css?v=white1">
 </head>
 <body>
 <header class="topbar">
@@ -30,7 +30,13 @@
 
 <main>
   <div class="card" style="max-width:620px">
-    <h2>POD DETAILS</h2>
+    <div class="card-head">
+      <div class="titles">
+        <h2>CREATE POD</h2>
+        <span class="sub">Deploy a container into your namespace</span>
+      </div>
+      <a class="back-link" href="pod-dashboard.jsp">Back to dashboard</a>
+    </div>
 
     <div id="msg" class="msg hidden"></div>
 
@@ -51,7 +57,7 @@
 
 <script src="js/portal.js"></script>
 <script>
-  document.getElementById('podForm').addEventListener('submit', async (e) => {
+  document.getElementById('podForm').addEventListener('submit', async function (e) {
     e.preventDefault();
     const btn = document.getElementById('submitBtn');
     btn.disabled = true;
@@ -71,7 +77,7 @@
       return;
     }
     Portal.show('msg', 'Pod ' + body.podName + ' created in ' + body.namespace, 'ok');
-    setTimeout(() => {
+    setTimeout(function () {
       window.location.href = 'pod-details.jsp?id=' + encodeURIComponent(body.podId);
     }, 1000);
   });

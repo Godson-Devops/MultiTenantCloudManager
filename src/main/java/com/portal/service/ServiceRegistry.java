@@ -3,14 +3,6 @@ package com.portal.service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- * Lazily constructs and shares the three external-provider clients.
- *
- * Each client authenticates on construction (OpenStack, Kubernetes) or opens a
- * connection pool (Prometheus), so they are built on first use and reused
- * afterwards rather than per request. A construction failure is not cached, so
- * a provider that is down at boot can recover once it comes back.
- */
 public final class ServiceRegistry {
 
     private static final Logger LOG = LoggerFactory.getLogger(ServiceRegistry.class);

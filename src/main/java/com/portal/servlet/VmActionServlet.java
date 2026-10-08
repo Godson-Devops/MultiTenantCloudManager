@@ -2,6 +2,7 @@ package com.portal.servlet;
 
 import com.portal.dao.UserDao;
 import com.portal.dao.VmDao;
+import com.portal.model.Status;
 import com.portal.model.VmDetails;
 import com.portal.service.ServiceRegistry;
 import com.portal.util.WebUtil;
@@ -10,11 +11,14 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
 import java.io.IOException;
-import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
-/** START / STOP / RESTART / DELETE for a VM the caller owns. */
 public class VmActionServlet extends BaseServlet {
+
+    private static final Set<String> SUPPORTED_ACTIONS =
+            Set.of("start", "stop", "restart", "delete");
 
     private final VmDao vmDao = new VmDao();
     private final UserDao userDao = new UserDao();
@@ -35,52 +39,57 @@ public class VmActionServlet extends BaseServlet {
             sendError(response, HttpServletResponse.SC_BAD_REQUEST, "id and action are required");
             return;
         }
+        String verb = action.toLowerCase(Locale.ROOT);
+        if (!SUPPORTED_ACTIONS.contains(verb)) {
+            sendError(response, HttpServletResponse.SC_BAD_REQUEST, "Unknown action: " + action);
+            return;
+        }
 
         VmDetails vm = vmDao.findByIdAndUser(vmId, userId);
         if (!requireOwner(vm == null ? null : vm.getUserId(), userId, response)) {
             return;
         }
 
+        Status status;
         try {
-            switch (action.toLowerCase()) {
-                case "start" -> {
-                    ServiceRegistry.openStack().start(vmId);
-                    vmDao.updateStatus(vmId, userId, "running");
-                }
-                case "stop" -> {
-                    ServiceRegistry.openStack().stop(vmId);
-                    vmDao.updateStatus(vmId, userId, "stopped");
-                }
-                case "restart" -> {
-                    ServiceRegistry.openStack().restart(vmId);
-                    // A soft reboot leaves the VM ACTIVE in Nova; reflect that
-                    // rather than a state the UI has no vocabulary for.
-                    vmDao.updateStatus(vmId, userId, "running");
-                }
-                case "delete" -> {
-                    ServiceRegistry.openStack().delete(vmId);
-                    if (vmDao.delete(vmId, userId)) {
-                        userDao.releaseVmSlot(userId);
-                    }
-                }
-                default -> {
-                    sendError(response, HttpServletResponse.SC_BAD_REQUEST,
-                            "Unknown action: " + action);
-                    return;
-                }
-            }
+            status = apply(verb, vmId, userId);
         } catch (RuntimeException e) {
-            getServletContext().log("OpenStack action " + action + " failed for " + vmId, e);
-            vmDao.updateStatus(vmId, userId, "error");
+            getServletContext().log("OpenStack action " + verb + " failed for " + vmId, e);
+            vmDao.updateStatus(vmId, userId, Status.ERROR);
             sendProviderError(response, HttpServletResponse.SC_BAD_GATEWAY,
-                    "OpenStack VM " + action, e);
+                    "OpenStack VM " + verb, e);
             return;
         }
 
-        Map<String, Object> body = new HashMap<>();
-        body.put("action", action);
-        body.put("vmId", vmId);
-        body.put("status", "delete".equalsIgnoreCase(action) ? "deleted" : "ok");
-        sendOk(response, body);
+        sendOk(response, Map.of(
+                "action", verb,
+                "vmId", vmId,
+                "status", status.code()));
+    }
+
+    private Status apply(String verb, String vmId, String userId) {
+        switch (verb) {
+            case "start":
+                ServiceRegistry.openStack().start(vmId);
+                return track(vmId, userId, Status.RUNNING);
+            case "stop":
+                ServiceRegistry.openStack().stop(vmId);
+                return track(vmId, userId, Status.STOPPED);
+            case "restart":
+                ServiceRegistry.openStack().restart(vmId);
+
+                return track(vmId, userId, Status.RUNNING);
+            default:
+                ServiceRegistry.openStack().delete(vmId);
+                if (vmDao.delete(vmId, userId)) {
+                    userDao.releaseVmSlot(userId);
+                }
+                return Status.DELETED;
+        }
+    }
+
+    private Status track(String vmId, String userId, Status status) {
+        vmDao.updateStatus(vmId, userId, status);
+        return status;
     }
 }

@@ -12,7 +12,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Pod Monitoring &middot; Cloud Provisioning Portal</title>
-  <link rel="stylesheet" href="css/portal.css">
+  <link rel="stylesheet" href="css/portal.css?v=white1">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
@@ -31,34 +31,49 @@
 <form id="logoutForm" method="post" action="logout" style="display:none"></form>
 
 <main>
-  <div style="margin-bottom:14px">
-    <a href="pod-dashboard.jsp">&larr; Back to dashboard</a>
+  <div class="action-row" style="margin-bottom:16px">
+    <a class="back-link" href="pod-details.jsp?id=<%= podId == null ? "" : java.net.URLEncoder.encode(podId, "UTF-8") %>">Back to pod details</a>
   </div>
 
   <div id="msg" class="msg hidden"></div>
 
   <div class="grid-2">
     <div class="card">
-      <h2>MEMORY USAGE</h2>
+      <div class="card-head">
+        <div class="titles">
+          <h2>MEMORY USAGE</h2>
+          <span class="sub">Total pod memory across containers</span>
+        </div>
+      </div>
       <div class="chart-box"><canvas id="memoryChart"></canvas></div>
     </div>
     <div class="card">
-      <h2>CPU UTILIZATION</h2>
+      <div class="card-head">
+        <div class="titles">
+          <h2>CPU UTILIZATION</h2>
+          <span class="sub">Aggregate CPU cores used</span>
+        </div>
+      </div>
       <div class="chart-box"><canvas id="cpuChart"></canvas></div>
     </div>
   </div>
 
   <div class="card">
-    <h2>POD NETWORK</h2>
+    <div class="card-head">
+      <div class="titles">
+        <h2>POD NETWORK</h2>
+        <span class="sub">Transmit + receive throughput</span>
+      </div>
+    </div>
     <div class="chart-box"><canvas id="networkChart"></canvas></div>
   </div>
 </main>
 
 <script src="js/portal.js"></script>
 <script>
-  const POD_ID = <%= podId == null ? "null" : "\"" + podId.replace("\"", "") + "\"" %>;
+  const POD_ID = <%= podId == null ? "null" : "\"" + podId.replace("\\", "\\\\").replace("\"", "\\\"").replace("<", "\\u003c").replace("\n", " ").replace("\r", " ") + "\"" %>;
   const charts = {};
-  const COLORS = { memory: '#38bdf8', cpu: '#4ade80', network: '#c084fc' };
+  const COLORS = { memory: '#7c5cfb', cpu: '#059669', network: '#d946ef' };
 
   function render(id, series, color, unit) {
     const box = document.getElementById(id);
@@ -88,10 +103,10 @@
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        plugins: { legend: { labels: { color: '#e2e8f0' } } },
+        plugins: { legend: { labels: { color: '#17132b' } } },
         scales: {
-          x: { ticks: { color: '#94a3b8', maxTicksLimit: 6 }, grid: { color: '#33415555' } },
-          y: { ticks: { color: '#94a3b8' }, grid: { color: '#33415555' } }
+          x: { ticks: { color: '#6b7280', maxTicksLimit: 6 }, grid: { color: 'rgba(23,19,43,.07)' } },
+          y: { ticks: { color: '#6b7280' }, grid: { color: 'rgba(23,19,43,.07)' } }
         }
       }
     });

@@ -6,12 +6,10 @@
 
   <display-name>Self-Service VM &amp; Pod Provisioning Portal</display-name>
 
-  <!-- Keeps MongoDB in step with OpenStack/Kubernetes. -->
   <listener>
     <listener-class>com.portal.listener.SyncWorkerListener</listener-class>
   </listener>
 
-  <!-- ===== Authentication ===== -->
   <servlet>
     <servlet-name>LoginServlet</servlet-name>
     <servlet-class>com.portal.servlet.LoginServlet</servlet-class>
@@ -39,7 +37,6 @@
     <url-pattern>/logout</url-pattern>
   </servlet-mapping>
 
-  <!-- ===== Virtual Machines ===== -->
   <servlet>
     <servlet-name>VmCreateServlet</servlet-name>
     <servlet-class>com.portal.servlet.VmCreateServlet</servlet-class>
@@ -85,7 +82,6 @@
     <url-pattern>/vm/metrics</url-pattern>
   </servlet-mapping>
 
-  <!-- ===== Pods ===== -->
   <servlet>
     <servlet-name>PodCreateServlet</servlet-name>
     <servlet-class>com.portal.servlet.PodCreateServlet</servlet-class>

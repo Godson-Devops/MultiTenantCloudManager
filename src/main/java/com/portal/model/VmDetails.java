@@ -8,13 +8,10 @@ public class VmDetails {
     private String vmIp;
     private String floatIp;
     private String sshKey;
-    private String status;
+    private Status status = Status.CREATING;
     private String projectName;
     private String flavor;
     private String image;
-
-    public VmDetails() {
-    }
 
     public String getVmId() {
         return vmId;
@@ -64,11 +61,11 @@ public class VmDetails {
         this.sshKey = sshKey;
     }
 
-    public String getStatus() {
+    public Status getStatus() {
         return status;
     }
 
-    public void setStatus(String status) {
+    public void setStatus(Status status) {
         this.status = status;
     }
 

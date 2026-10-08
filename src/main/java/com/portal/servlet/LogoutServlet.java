@@ -7,11 +7,6 @@ import jakarta.servlet.http.HttpSession;
 
 import java.io.IOException;
 
-/**
- * Ends the session and returns to the login page.
- *
- * Not in the spec's servlet list, but the UI has no other way to sign out.
- */
 public class LogoutServlet extends BaseServlet {
 
     @Override

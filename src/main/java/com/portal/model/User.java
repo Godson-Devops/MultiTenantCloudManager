@@ -2,24 +2,20 @@ package com.portal.model;
 
 public class User {
 
+    public static final int DEFAULT_MAX_VM = 3;
+    public static final int DEFAULT_MAX_POD = 3;
+
     private String userId;
+
     private String userPassword;
+
     private int usedVm;
-    private int maxVm;
+
+    private int maxVm = DEFAULT_MAX_VM;
+
     private int usedPod;
-    private int maxPod;
 
-    public User() {
-    }
-
-    public User(String userId, String userPassword, int usedVm, int maxVm, int usedPod, int maxPod) {
-        this.userId = userId;
-        this.userPassword = userPassword;
-        this.usedVm = usedVm;
-        this.maxVm = maxVm;
-        this.usedPod = usedPod;
-        this.maxPod = maxPod;
-    }
+    private int maxPod = DEFAULT_MAX_POD;
 
     public String getUserId() {
         return userId;
@@ -67,15 +63,5 @@ public class User {
 
     public void setMaxPod(int maxPod) {
         this.maxPod = maxPod;
-    }
-
-    /** True when the user has already used their entire VM allowance. */
-    public boolean isVmQuotaExceeded() {
-        return usedVm >= maxVm;
-    }
-
-    /** True when the user has already used their entire Pod allowance. */
-    public boolean isPodQuotaExceeded() {
-        return usedPod >= maxPod;
     }
 }

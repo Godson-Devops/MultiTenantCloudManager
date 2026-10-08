@@ -11,7 +11,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Pod Dashboard &middot; Cloud Provisioning Portal</title>
-  <link rel="stylesheet" href="css/portal.css">
+  <link rel="stylesheet" href="css/portal.css?v=white1">
 </head>
 <body>
 <header class="topbar">
@@ -30,17 +30,21 @@
 
 <main>
   <div class="card">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-      <h2 style="margin:0">LIST OF PODS</h2>
-      <a href="pod-create.jsp"><button>CREATE POD</button></a>
+    <div class="card-head">
+      <div class="titles">
+        <h2>LIST OF PODS</h2>
+        <span class="sub">All Kubernetes pods running in your namespaces</span>
+      </div>
+      <a class="btn" href="pod-create.jsp">+ CREATE POD</a>
     </div>
 
     <div id="msg" class="msg hidden"></div>
 
+    <div class="table-shell">
     <table>
       <thead>
         <tr>
-          <th>LIST OF PODS_NAME</th>
+          <th>POD NAME</th>
           <th>NAMESPACE</th>
           <th>IMAGE</th>
           <th>STATUS</th>
@@ -51,6 +55,7 @@
         <tr><td colspan="5" class="empty">Loading...</td></tr>
       </tbody>
     </table>
+    </div>
   </div>
 </main>
 
@@ -73,15 +78,17 @@
       return;
     }
 
-    document.getElementById('podBody').innerHTML = pods.map(p => `
+    document.getElementById('podBody').innerHTML = pods.map(function (p) {
+      return `
       <tr>
         <td>\${Portal.esc(p.podName)}</td>
         <td>\${Portal.esc(p.namespace)}</td>
         <td>\${Portal.esc(p.image)}</td>
         <td>\${Portal.badge(p.status)}</td>
-        <td><a href="pod-details.jsp?id=\${encodeURIComponent(p.podId)}">View details</a></td>
+        <td><a class="link-pill" href="pod-details.jsp?id=\${encodeURIComponent(p.podId)}">View details</a></td>
       </tr>
-    `).join('');
+    `;
+    }).join('');
   }
 
   loadPods();

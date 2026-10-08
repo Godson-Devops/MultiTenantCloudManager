@@ -12,7 +12,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>VM Monitoring &middot; Cloud Provisioning Portal</title>
-  <link rel="stylesheet" href="css/portal.css">
+  <link rel="stylesheet" href="css/portal.css?v=white1">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
@@ -31,27 +31,47 @@
 <form id="logoutForm" method="post" action="logout" style="display:none"></form>
 
 <main>
-  <div style="margin-bottom:14px">
-    <a href="vm-dashboard.jsp">&larr; Back to dashboard</a>
+  <div class="action-row" style="margin-bottom:16px">
+    <a class="back-link" href="vm-details.jsp?id=<%= vmId == null ? "" : java.net.URLEncoder.encode(vmId, "UTF-8") %>">Back to VM details</a>
   </div>
 
   <div id="msg" class="msg hidden"></div>
 
   <div class="grid-2">
     <div class="card">
-      <h2>MEMORY USAGE</h2>
+      <div class="card-head">
+        <div class="titles">
+          <h2>MEMORY</h2>
+          <span class="sub">RAM used vs total</span>
+        </div>
+      </div>
       <div class="chart-box"><canvas id="memoryChart"></canvas></div>
     </div>
     <div class="card">
-      <h2>CPU UTILIZATION</h2>
+      <div class="card-head">
+        <div class="titles">
+          <h2>CPU UTILIZATION</h2>
+          <span class="sub">Percentage of compute in use</span>
+        </div>
+      </div>
       <div class="chart-box"><canvas id="cpuChart"></canvas></div>
     </div>
     <div class="card">
-      <h2>DISK IO &amp; SPACE</h2>
+      <div class="card-head">
+        <div class="titles">
+          <h2>DISK IO &amp; SPACE</h2>
+          <span class="sub">Root filesystem usage</span>
+        </div>
+      </div>
       <div class="chart-box"><canvas id="diskChart"></canvas></div>
     </div>
     <div class="card">
-      <h2>NETWORK TRAFFIC</h2>
+      <div class="card-head">
+        <div class="titles">
+          <h2>NETWORK TRAFFIC</h2>
+          <span class="sub">Receive + transmit bytes per second</span>
+        </div>
+      </div>
       <div class="chart-box"><canvas id="networkChart"></canvas></div>
     </div>
   </div>
@@ -59,9 +79,9 @@
 
 <script src="js/portal.js"></script>
 <script>
-  const VM_ID = <%= vmId == null ? "null" : "\"" + vmId.replace("\"", "") + "\"" %>;
+  const VM_ID = <%= vmId == null ? "null" : "\"" + vmId.replace("\\", "\\\\").replace("\"", "\\\"").replace("<", "\\u003c").replace("\n", " ").replace("\r", " ") + "\"" %>;
   const charts = {};
-  const COLORS = { memory: '#38bdf8', cpu: '#4ade80', disk: '#fbbf24', network: '#c084fc' };
+  const COLORS = { memory: '#7c5cfb', cpu: '#059669', disk: '#d97706', network: '#d946ef' };
 
   function render(id, series, label, color, unit) {
     const box = document.getElementById(id);
@@ -91,10 +111,10 @@
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        plugins: { legend: { labels: { color: '#e2e8f0' } } },
+        plugins: { legend: { labels: { color: '#17132b' } } },
         scales: {
-          x: { ticks: { color: '#94a3b8', maxTicksLimit: 6 }, grid: { color: '#33415555' } },
-          y: { ticks: { color: '#94a3b8' }, grid: { color: '#33415555' } }
+          x: { ticks: { color: '#6b7280', maxTicksLimit: 6 }, grid: { color: 'rgba(23,19,43,.07)' } },
+          y: { ticks: { color: '#6b7280' }, grid: { color: 'rgba(23,19,43,.07)' } }
         }
       }
     });

@@ -11,7 +11,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Create VM &middot; Cloud Provisioning Portal</title>
-  <link rel="stylesheet" href="css/portal.css">
+  <link rel="stylesheet" href="css/portal.css?v=white1">
 </head>
 <body>
 <header class="topbar">
@@ -30,7 +30,13 @@
 
 <main>
   <div class="card" style="max-width:620px">
-    <h2>VM DETAILS</h2>
+    <div class="card-head">
+      <div class="titles">
+        <h2>CREATE VM</h2>
+        <span class="sub">Launch a new OpenStack instance</span>
+      </div>
+      <a class="back-link" href="vm-dashboard.jsp">Back to dashboard</a>
+    </div>
 
     <div id="msg" class="msg hidden"></div>
     <div id="progress" class="msg hidden"></div>
@@ -61,7 +67,7 @@
 
 <script src="js/portal.js"></script>
 <script>
-  document.getElementById('vmForm').addEventListener('submit', async (e) => {
+  document.getElementById('vmForm').addEventListener('submit', async function (e) {
     e.preventDefault();
     const btn = document.getElementById('submitBtn');
     btn.disabled = true;
@@ -84,19 +90,18 @@
       return;
     }
 
-    // Spec section G: poll the detail endpoint until the VM leaves "creating".
     Portal.show('progress', 'Creating...', 'ok');
     const vmId = body.vmId;
-    const timer = setInterval(async () => {
+    const timer = setInterval(async function () {
       const res = await Portal.get('vm/details?id=' + encodeURIComponent(vmId));
       if (res.status !== 200) { clearInterval(timer); return; }
-      if (res.body.status === 'running') {
+      if (res.body.status === Portal.STATUS.RUNNING) {
         clearInterval(timer);
         Portal.show('progress', 'VM is running.', 'ok');
-        setTimeout(() => {
+        setTimeout(function () {
           window.location.href = 'vm-details.jsp?id=' + encodeURIComponent(vmId);
         }, 900);
-      } else if (res.body.status === 'error') {
+      } else if (res.body.status === Portal.STATUS.ERROR) {
         clearInterval(timer);
         Portal.show('progress', 'The VM entered an error state.', 'err');
         btn.disabled = false;
