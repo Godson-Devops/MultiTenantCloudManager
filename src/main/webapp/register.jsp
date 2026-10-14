@@ -14,18 +14,13 @@
   <link rel="stylesheet" href="css/portal.css?v=white1">
   <link rel="stylesheet" href="css/auth.css?v=white1">
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://fonts.gstatic.com">
   <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
 <body class="auth-page">
 <div class="auth-shell">
   <div class="auth-brand">
-    <span class="mark" aria-hidden="true">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-           stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M17.5 19a4.5 4.5 0 0 0 .5-8.96A6 6 0 0 0 6.2 9.2 4.4 4.4 0 0 0 6.5 19z"/>
-      </svg>
-    </span>
+    <span class="mark" aria-hidden="true"></span>
     Cloud Portal
   </div>
 
@@ -42,11 +37,11 @@
       </div>
       <div class="field">
         <label for="password">Password</label>
-        <input type="password" id="password" name="password" placeholder="min. 8 characters" required minlength="8">
+        <input type="password" id="password" name="password" placeholder="min. 8 characters" required>
       </div>
       <div class="field">
         <label for="confirm">Confirm password</label>
-        <input type="password" id="confirm" name="confirm" placeholder="repeat password" required minlength="8">
+        <input type="password" id="confirm" name="confirm" placeholder="repeat password" required>
       </div>
       <button type="submit" class="auth-btn" id="submitBtn">Register</button>
     </form>
@@ -62,6 +57,10 @@
   document.getElementById('registerForm').addEventListener('submit', async function (e) {
     e.preventDefault();
     const pwd = document.getElementById('password').value;
+    if (pwd.length < 8) {
+      Portal.show('msg', 'Password must be at least 8 characters', 'err');
+      return;
+    }
     if (pwd !== document.getElementById('confirm').value) {
       Portal.show('msg', 'Passwords do not match', 'err');
       return;

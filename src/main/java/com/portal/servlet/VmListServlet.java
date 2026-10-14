@@ -7,12 +7,12 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 public class VmListServlet extends BaseServlet {
+
+    private static final long serialVersionUID = 1L;
 
     private final VmDao vmDao = new VmDao();
 
@@ -20,22 +20,13 @@ public class VmListServlet extends BaseServlet {
     protected void doGet(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
 
-        if (!requireSession(request, response)) {
+        String userId = requireLogin(request, response);
+        if (userId == null) {
             return;
         }
-        List<VmDetails> vms = vmDao.findByUser(currentUser(request));
 
-        List<Map<String, Object>> rows = new ArrayList<>(vms.size());
-        for (VmDetails vm : vms) {
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("vmId", vm.getVmId());
-            row.put("vmName", vm.getVmName());
-            row.put("status", vm.getStatus());
-            row.put("projectName", vm.getProjectName());
-            row.put("vmIp", vm.getVmIp());
-            row.put("floatIp", vm.getFloatIp());
-            rows.add(row);
-        }
+        List<Map<String, Object>> rows =
+                vmDao.findByUser(userId).stream().map(VmDetails::toMap).toList();
         sendOk(response, Map.of("vms", rows));
     }
 }

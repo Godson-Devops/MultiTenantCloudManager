@@ -1,5 +1,8 @@
 package com.portal.model;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 public class VmDetails {
 
     private String vmId;
@@ -12,6 +15,20 @@ public class VmDetails {
     private String projectName;
     private String flavor;
     private String image;
+
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("vmId", vmId);
+        map.put("vmName", vmName);
+        map.put("status", status);
+        map.put("projectName", projectName);
+        map.put("flavor", flavor);
+        map.put("image", image);
+        map.put("vmIp", vmIp);
+        map.put("floatIp", floatIp);
+        map.put("sshKey", sshKey);
+        return map;
+    }
 
     public String getVmId() {
         return vmId;

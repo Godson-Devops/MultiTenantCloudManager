@@ -5,37 +5,38 @@ import com.portal.model.Status;
 import com.portal.util.JdbcConnection;
 
 import java.sql.Connection;
-import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 
 public class PodDao {
-
-    private static final String INSERT_SQL =
-            "INSERT INTO pod_table (pod_id, user_id, pod_name, namespace, node_name,"
-                    + " status, restart_count, pod_ip, pod_port, image)"
-                    + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
     private static final String SELECT_COLUMNS =
             "SELECT pod_id, user_id, pod_name, namespace, node_name, status,"
                     + " restart_count, pod_ip, pod_port, image FROM pod_table";
 
     public void insert(PodDetails pod) {
+        String nodeName = pod.getNodeName() == null ? "NULL" : "'" + pod.getNodeName() + "'";
+        String podIp = pod.getPodIp() == null ? "NULL" : "'" + pod.getPodIp() + "'";
+        String image = pod.getImage() == null ? "NULL" : "'" + pod.getImage() + "'";
+
+        String sql = "INSERT INTO pod_table (pod_id, user_id, pod_name, namespace,"
+                + " node_name, status, restart_count, pod_ip, pod_port, image) VALUES ('"
+                + pod.getPodId() + "', '"
+                + pod.getUserId() + "', '"
+                + pod.getPodName() + "', '"
+                + pod.getNamespace() + "', "
+                + nodeName + ", '"
+                + statusCode(pod) + "', "
+                + pod.getRestartCount() + ", "
+                + podIp + ", "
+                + pod.getPodPort() + ", "
+                + image + ")";
         try (Connection conn = JdbcConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(INSERT_SQL)) {
-            ps.setString(1, pod.getPodId());
-            ps.setString(2, pod.getUserId());
-            ps.setString(3, pod.getPodName());
-            ps.setString(4, pod.getNamespace());
-            ps.setString(5, pod.getNodeName());
-            ps.setString(6, statusCode(pod));
-            ps.setInt(7, pod.getRestartCount());
-            ps.setString(8, pod.getPodIp());
-            ps.setInt(9, pod.getPodPort());
-            ps.setString(10, pod.getImage());
-            ps.executeUpdate();
+             Statement statement = conn.createStatement()) {
+            statement.executeUpdate(sql);
         } catch (SQLException e) {
             throw failure("insert pod " + pod.getPodId(), e);
         }
@@ -45,14 +46,12 @@ public class PodDao {
         if (podId == null || userId == null) {
             return null;
         }
-        String sql = SELECT_COLUMNS + " WHERE pod_id = ? AND user_id = ?";
+        String sql = SELECT_COLUMNS + " WHERE pod_id = '" + podId
+                + "' AND user_id = '" + userId + "'";
         try (Connection conn = JdbcConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, podId);
-            ps.setString(2, userId);
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() ? map(rs) : null;
-            }
+             Statement statement = conn.createStatement();
+             ResultSet rs = statement.executeQuery(sql)) {
+            return rs.next() ? map(rs) : null;
         } catch (SQLException e) {
             throw failure("load pod " + podId, e);
         }
@@ -63,14 +62,12 @@ public class PodDao {
         if (userId == null) {
             return owned;
         }
-        String sql = SELECT_COLUMNS + " WHERE user_id = ?";
+        String sql = SELECT_COLUMNS + " WHERE user_id = '" + userId + "'";
         try (Connection conn = JdbcConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, userId);
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    owned.add(map(rs));
-                }
+             Statement statement = conn.createStatement();
+             ResultSet rs = statement.executeQuery(sql)) {
+            while (rs.next()) {
+                owned.add(map(rs));
             }
             return owned;
         } catch (SQLException e) {
@@ -81,8 +78,8 @@ public class PodDao {
     public List<PodDetails> findAll() {
         List<PodDetails> all = new ArrayList<>();
         try (Connection conn = JdbcConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(SELECT_COLUMNS);
-             ResultSet rs = ps.executeQuery()) {
+             Statement statement = conn.createStatement();
+             ResultSet rs = statement.executeQuery(SELECT_COLUMNS)) {
             while (rs.next()) {
                 all.add(map(rs));
             }
@@ -93,13 +90,11 @@ public class PodDao {
     }
 
     public void updateStatus(String podId, String userId, Status status) {
-        String sql = "UPDATE pod_table SET status = ? WHERE pod_id = ? AND user_id = ?";
+        String sql = "UPDATE pod_table SET status = '" + statusCode(status)
+                + "' WHERE pod_id = '" + podId + "' AND user_id = '" + userId + "'";
         try (Connection conn = JdbcConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, statusCode(status));
-            ps.setString(2, podId);
-            ps.setString(3, userId);
-            ps.executeUpdate();
+             Statement statement = conn.createStatement()) {
+            statement.executeUpdate(sql);
         } catch (SQLException e) {
             throw failure("update status of pod " + podId, e);
         }
@@ -107,61 +102,55 @@ public class PodDao {
 
     public void updateStatusUnscoped(String podId, Status status, String podIp,
                                      String nodeName, Integer restartCount) {
-        StringBuilder sql = new StringBuilder("UPDATE pod_table SET status = ?");
+        StringBuilder sql = new StringBuilder("UPDATE pod_table SET status = '" + statusCode(status) + "'");
         if (podIp != null) {
-            sql.append(", pod_ip = ?");
+            sql.append(", pod_ip = '" + podIp + "'");
         }
         if (nodeName != null) {
-            sql.append(", node_name = ?");
+            sql.append(", node_name = '" + nodeName + "'");
         }
         if (restartCount != null) {
-            sql.append(", restart_count = ?");
+            sql.append(", restart_count = " + restartCount);
         }
-        sql.append(" WHERE pod_id = ?");
+        sql.append(" WHERE pod_id = '" + podId + "'");
 
         try (Connection conn = JdbcConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql.toString())) {
-            int column = 1;
-            ps.setString(column++, statusCode(status));
-            if (podIp != null) {
-                ps.setString(column++, podIp);
-            }
-            if (nodeName != null) {
-                ps.setString(column++, nodeName);
-            }
-            if (restartCount != null) {
-                ps.setInt(column++, restartCount);
-            }
-            ps.setString(column, podId);
-            ps.executeUpdate();
+             Statement statement = conn.createStatement()) {
+            statement.executeUpdate(sql.toString());
         } catch (SQLException e) {
             throw failure("sync pod " + podId, e);
         }
     }
 
-    public boolean delete(String podId, String userId) {
-        String sql = "DELETE FROM pod_table WHERE pod_id = ? AND user_id = ?";
+    public void incrementRestartCount(String podId, String userId) {
+        String sql = "UPDATE pod_table SET restart_count = restart_count + 1"
+                + " WHERE pod_id = '" + podId + "' AND user_id = '" + userId + "'";
         try (Connection conn = JdbcConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, podId);
-            ps.setString(2, userId);
-            return ps.executeUpdate() > 0;
+             Statement statement = conn.createStatement()) {
+            statement.executeUpdate(sql);
+        } catch (SQLException e) {
+            throw failure("increment restart count of pod " + podId, e);
+        }
+    }
+
+    public boolean delete(String podId, String userId) {
+        String sql = "DELETE FROM pod_table WHERE pod_id = '" + podId
+                + "' AND user_id = '" + userId + "'";
+        try (Connection conn = JdbcConnection.getConnection();
+             Statement statement = conn.createStatement()) {
+            return statement.executeUpdate(sql) > 0;
         } catch (SQLException e) {
             throw failure("delete pod " + podId, e);
         }
     }
 
     public boolean existsByName(String userId, String podName, String namespace) {
-        String sql = "SELECT 1 FROM pod_table"
-                + " WHERE user_id = ? AND pod_name = ? AND namespace = ?";
+        String sql = "SELECT 1 FROM pod_table WHERE user_id = '" + userId
+                + "' AND pod_name = '" + podName + "' AND namespace = '" + namespace + "'";
         try (Connection conn = JdbcConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, userId);
-            ps.setString(2, podName);
-            ps.setString(3, namespace);
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next();
-            }
+             Statement statement = conn.createStatement();
+             ResultSet rs = statement.executeQuery(sql)) {
+            return rs.next();
         } catch (SQLException e) {
             throw failure("look up pod named " + podName, e);
         }

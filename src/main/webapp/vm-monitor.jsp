@@ -83,7 +83,7 @@
   const charts = {};
   const COLORS = { memory: '#7c5cfb', cpu: '#059669', disk: '#d97706', network: '#d946ef' };
 
-  function render(id, series, label, color, unit) {
+  function render(id, series, label, color, unit, yTitle) {
     const box = document.getElementById(id);
     const chart = Portal.toChart(series, unit === 'bytes');
 
@@ -100,6 +100,7 @@
       data: {
         labels: chart.labels,
         datasets: [{
+          label: label,
           data: chart.data,
           borderColor: color,
           backgroundColor: color + '22',
@@ -113,8 +114,16 @@
         maintainAspectRatio: false,
         plugins: { legend: { labels: { color: '#17132b' } } },
         scales: {
-          x: { ticks: { color: '#6b7280', maxTicksLimit: 6 }, grid: { color: 'rgba(23,19,43,.07)' } },
-          y: { ticks: { color: '#6b7280' }, grid: { color: 'rgba(23,19,43,.07)' } }
+          x: {
+            title: { display: true, text: 'Time', color: '#6b7280' },
+            ticks: { color: '#6b7280', maxTicksLimit: 6 },
+            grid: { color: 'rgba(23,19,43,.07)' }
+          },
+          y: {
+            title: { display: true, text: yTitle || '', color: '#6b7280' },
+            ticks: { color: '#6b7280' },
+            grid: { color: 'rgba(23,19,43,.07)' }
+          }
         }
       }
     });
@@ -138,10 +147,10 @@
       Portal.hide('msg');
     }
 
-    render('memoryChart', body.memory, 'Memory', COLORS.memory, 'bytes');
-    render('cpuChart', body.cpu, 'CPU %', COLORS.cpu, 'none');
-    render('diskChart', body.disk, 'Disk', COLORS.disk, 'bytes');
-    render('networkChart', body.network, 'Network', COLORS.network, 'none');
+    render('memoryChart', body.memory, 'Memory', COLORS.memory, 'bytes', 'MiB');
+    render('cpuChart', body.cpu, 'CPU %', COLORS.cpu, 'none', '%');
+    render('diskChart', body.disk, 'Disk', COLORS.disk, 'bytes', 'MiB');
+    render('networkChart', body.network, 'Network', COLORS.network, 'none', 'B/s');
   }
 
   refresh();

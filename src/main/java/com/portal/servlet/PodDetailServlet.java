@@ -2,19 +2,18 @@ package com.portal.servlet;
 
 import com.portal.dao.PodDao;
 import com.portal.model.PodDetails;
-import com.portal.service.KubernetesService;
+import com.portal.model.Status;
 import com.portal.service.ServiceRegistry;
-import com.portal.util.WebUtil;
-import io.fabric8.kubernetes.api.model.Pod;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
 import java.io.IOException;
-import java.util.LinkedHashMap;
 import java.util.Map;
 
 public class PodDetailServlet extends BaseServlet {
+
+    private static final long serialVersionUID = 1L;
 
     private final PodDao podDao = new PodDao();
 
@@ -22,46 +21,34 @@ public class PodDetailServlet extends BaseServlet {
     protected void doGet(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
 
-        if (!requireSession(request, response)) {
+        String userId = requireLogin(request, response);
+        if (userId == null) {
             return;
         }
-        String userId = currentUser(request);
-        String podId = WebUtil.param(request, "id");
-
+        String podId = requireId(request, response);
         if (podId == null) {
-            sendError(response, HttpServletResponse.SC_BAD_REQUEST, "id is required");
             return;
         }
 
         PodDetails pod = podDao.findByIdAndUser(podId, userId);
-        if (!requireOwner(pod == null ? null : pod.getUserId(), userId, response)) {
+        if (!requireOwned(pod, PodDetails::getUserId, userId, response)) {
             return;
         }
 
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("podId", pod.getPodId());
-        body.put("podName", pod.getPodName());
-        body.put("namespace", pod.getNamespace());
-        body.put("status", pod.getStatus());
-        body.put("podIp", pod.getPodIp());
-        body.put("nodeName", pod.getNodeName());
-        body.put("restartCount", pod.getRestartCount());
-        body.put("podPort", pod.getPodPort());
-        body.put("image", pod.getImage());
+        Map<String, Object> body = pod.toMap();
 
         try {
-            Pod live = ServiceRegistry.kubernetes().get(pod.getNamespace(), pod.getPodName());
-            body.put("status", KubernetesService.statusOf(live));
+            PodDetails live = ServiceRegistry.kubernetes().get(pod.getNamespace(), pod.getPodName());
             if (live != null) {
-                String ip = KubernetesService.ipOf(live);
-                if (ip != null) {
-                    body.put("podIp", ip);
+                body.put("status", live.getStatus());
+                if (live.getPodIp() != null) {
+                    body.put("podIp", live.getPodIp());
                 }
-                String node = live.getSpec() == null ? null : live.getSpec().getNodeName();
-                if (node != null) {
-                    body.put("nodeName", node);
+                if (live.getNodeName() != null) {
+                    body.put("nodeName", live.getNodeName());
                 }
-                body.put("restartCount", KubernetesService.restartCount(live));
+            } else if (pod.getStatus() != Status.STOPPED) {
+                body.put("status", Status.ERROR);
             }
         } catch (RuntimeException e) {
             getServletContext().log("Kubernetes refresh failed for " + podId, e);

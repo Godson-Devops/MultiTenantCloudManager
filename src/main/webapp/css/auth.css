@@ -86,6 +86,13 @@ body.auth-page::after {
   box-shadow: 0 8px 20px -8px rgba(124, 92, 251, .65);
   color: #fff;
 }
+.auth-brand .mark::before {
+  content: "";
+  width: 18px; height: 18px;
+  background-color: #fff;
+  -webkit-mask: url("../img/cloud.svg") center / 18px 18px no-repeat;
+  mask: url("../img/cloud.svg") center / 18px 18px no-repeat;
+}
 
 .auth-panel {
   position: relative;

@@ -10,7 +10,6 @@ import com.portal.service.KubernetesService;
 import com.portal.service.OpenStackService;
 import com.portal.service.ServiceRegistry;
 import com.portal.util.AppConfig;
-import io.fabric8.kubernetes.api.model.Pod;
 import jakarta.servlet.ServletContextEvent;
 import jakarta.servlet.ServletContextListener;
 import org.slf4j.Logger;
@@ -29,7 +28,7 @@ public class SyncWorkerListener implements ServletContextListener {
     private final PodDao podDao = new PodDao();
 
     private ScheduledExecutorService scheduler;
-    private volatile boolean schemaReady;
+    private boolean schemaReady;
 
     @Override
     public void contextInitialized(ServletContextEvent sce) {
@@ -109,13 +108,21 @@ public class SyncWorkerListener implements ServletContextListener {
         }
 
         Status liveStatus = OpenStackService.statusOf(server);
-        String floatingIp = openStack.findFloatingIp(vm.getVmId(), vm.getVmIp());
+        String privateIp = OpenStackService.resolvePrivateIp(server);
+        String ipToUse = privateIp != null ? privateIp : vm.getVmIp();
+        String floatingIp = liveStatus == Status.RUNNING
+                ? openStack.ensureFloatingIp(vm.getVmId(), ipToUse)
+                : openStack.findFloatingIp(vm.getVmId(), ipToUse);
+        if (floatingIp == null) {
+            floatingIp = vm.getFloatIp();
+        }
 
         boolean changed = liveStatus != vm.getStatus()
+                || !Objects.equals(privateIp, vm.getVmIp())
                 || !Objects.equals(floatingIp, vm.getFloatIp());
 
         if (changed) {
-            vmDao.updateStatusUnscoped(vm.getVmId(), liveStatus, vm.getVmIp(), floatingIp);
+            vmDao.updateStatusUnscoped(vm.getVmId(), liveStatus, privateIp, floatingIp);
         }
     }
 
@@ -130,33 +137,27 @@ public class SyncWorkerListener implements ServletContextListener {
     }
 
     private void refreshPod(KubernetesService kubernetes, PodDetails stored) {
-        Pod livePod = kubernetes.get(stored.getNamespace(), stored.getPodName());
+        PodDetails livePod = kubernetes.get(stored.getNamespace(), stored.getPodName());
 
         if (livePod == null) {
-            if (stored.getStatus() != Status.ERROR) {
+            if (stored.getStatus() != Status.ERROR && stored.getStatus() != Status.STOPPED) {
                 podDao.updateStatusUnscoped(
                         stored.getPodId(), Status.ERROR, null, null, null);
             }
             return;
         }
 
-        Status status = KubernetesService.statusOf(livePod);
-        String podIp = KubernetesService.ipOf(livePod);
-        String nodeName = nodeNameOf(livePod);
-        int restarts = KubernetesService.restartCount(livePod);
+        Status status = livePod.getStatus();
+        String podIp = livePod.getPodIp();
+        String nodeName = livePod.getNodeName();
 
         boolean changed = status != stored.getStatus()
                 || !Objects.equals(podIp, stored.getPodIp())
-                || !Objects.equals(nodeName, stored.getNodeName())
-                || restarts != stored.getRestartCount();
+                || !Objects.equals(nodeName, stored.getNodeName());
 
         if (changed) {
             podDao.updateStatusUnscoped(
-                    stored.getPodId(), status, podIp, nodeName, restarts);
+                    stored.getPodId(), status, podIp, nodeName, null);
         }
-    }
-
-    private static String nodeNameOf(Pod pod) {
-        return pod.getSpec() == null ? null : pod.getSpec().getNodeName();
     }
 }

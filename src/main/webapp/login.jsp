@@ -15,18 +15,13 @@
   <link rel="stylesheet" href="css/portal.css?v=white1">
   <link rel="stylesheet" href="css/auth.css?v=white1">
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://fonts.gstatic.com">
   <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
 <body class="auth-page">
 <div class="auth-shell">
   <div class="auth-brand">
-    <span class="mark" aria-hidden="true">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-           stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M17.5 19a4.5 4.5 0 0 0 .5-8.96A6 6 0 0 0 6.2 9.2 4.4 4.4 0 0 0 6.5 19z"/>
-      </svg>
-    </span>
+    <span class="mark" aria-hidden="true"></span>
     Cloud Portal
   </div>
 

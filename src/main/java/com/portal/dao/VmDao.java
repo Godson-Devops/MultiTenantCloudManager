@@ -5,37 +5,41 @@ import com.portal.model.VmDetails;
 import com.portal.util.JdbcConnection;
 
 import java.sql.Connection;
-import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 
 public class VmDao {
-
-    private static final String INSERT_SQL =
-            "INSERT INTO vm_table (vm_id, user_id, vm_name, vm_ip, float_ip, ssh_key,"
-                    + " status, project_name, flavor, image)"
-                    + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
     private static final String SELECT_COLUMNS =
             "SELECT vm_id, user_id, vm_name, vm_ip, float_ip, ssh_key, status,"
                     + " project_name, flavor, image FROM vm_table";
 
     public void insert(VmDetails vm) {
+        String vmIp = vm.getVmIp() == null ? "NULL" : "'" + vm.getVmIp() + "'";
+        String floatIp = vm.getFloatIp() == null ? "NULL" : "'" + vm.getFloatIp() + "'";
+        String sshKey = vm.getSshKey() == null ? "NULL" : "'" + vm.getSshKey() + "'";
+        String projectName = vm.getProjectName() == null ? "NULL" : "'" + vm.getProjectName() + "'";
+        String flavor = vm.getFlavor() == null ? "NULL" : "'" + vm.getFlavor() + "'";
+        String image = vm.getImage() == null ? "NULL" : "'" + vm.getImage() + "'";
+
+        String sql = "INSERT INTO vm_table (vm_id, user_id, vm_name, vm_ip, float_ip,"
+                + " ssh_key, status, project_name, flavor, image) VALUES ('"
+                + vm.getVmId() + "', '"
+                + vm.getUserId() + "', '"
+                + vm.getVmName() + "', "
+                + vmIp + ", "
+                + floatIp + ", "
+                + sshKey + ", '"
+                + statusCode(vm) + "', "
+                + projectName + ", "
+                + flavor + ", "
+                + image + ")";
         try (Connection conn = JdbcConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(INSERT_SQL)) {
-            ps.setString(1, vm.getVmId());
-            ps.setString(2, vm.getUserId());
-            ps.setString(3, vm.getVmName());
-            ps.setString(4, vm.getVmIp());
-            ps.setString(5, vm.getFloatIp());
-            ps.setString(6, vm.getSshKey());
-            ps.setString(7, statusCode(vm));
-            ps.setString(8, vm.getProjectName());
-            ps.setString(9, vm.getFlavor());
-            ps.setString(10, vm.getImage());
-            ps.executeUpdate();
+             Statement statement = conn.createStatement()) {
+            statement.executeUpdate(sql);
         } catch (SQLException e) {
             throw failure("insert VM " + vm.getVmId(), e);
         }
@@ -45,14 +49,12 @@ public class VmDao {
         if (vmId == null || userId == null) {
             return null;
         }
-        String sql = SELECT_COLUMNS + " WHERE vm_id = ? AND user_id = ?";
+        String sql = SELECT_COLUMNS + " WHERE vm_id = '" + vmId
+                + "' AND user_id = '" + userId + "'";
         try (Connection conn = JdbcConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, vmId);
-            ps.setString(2, userId);
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() ? map(rs) : null;
-            }
+             Statement statement = conn.createStatement();
+             ResultSet rs = statement.executeQuery(sql)) {
+            return rs.next() ? map(rs) : null;
         } catch (SQLException e) {
             throw failure("load VM " + vmId, e);
         }
@@ -63,14 +65,12 @@ public class VmDao {
         if (userId == null) {
             return owned;
         }
-        String sql = SELECT_COLUMNS + " WHERE user_id = ?";
+        String sql = SELECT_COLUMNS + " WHERE user_id = '" + userId + "'";
         try (Connection conn = JdbcConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, userId);
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    owned.add(map(rs));
-                }
+             Statement statement = conn.createStatement();
+             ResultSet rs = statement.executeQuery(sql)) {
+            while (rs.next()) {
+                owned.add(map(rs));
             }
             return owned;
         } catch (SQLException e) {
@@ -81,8 +81,8 @@ public class VmDao {
     public List<VmDetails> findAll() {
         List<VmDetails> all = new ArrayList<>();
         try (Connection conn = JdbcConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(SELECT_COLUMNS);
-             ResultSet rs = ps.executeQuery()) {
+             Statement statement = conn.createStatement();
+             ResultSet rs = statement.executeQuery(SELECT_COLUMNS)) {
             while (rs.next()) {
                 all.add(map(rs));
             }
@@ -93,66 +93,52 @@ public class VmDao {
     }
 
     public void updateStatus(String vmId, String userId, Status status) {
-        String sql = "UPDATE vm_table SET status = ? WHERE vm_id = ? AND user_id = ?";
+        String sql = "UPDATE vm_table SET status = '" + statusCode(status)
+                + "' WHERE vm_id = '" + vmId + "' AND user_id = '" + userId + "'";
         try (Connection conn = JdbcConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, statusCode(status));
-            ps.setString(2, vmId);
-            ps.setString(3, userId);
-            ps.executeUpdate();
+             Statement statement = conn.createStatement()) {
+            statement.executeUpdate(sql);
         } catch (SQLException e) {
             throw failure("update status of VM " + vmId, e);
         }
     }
 
     public void updateStatusUnscoped(String vmId, Status status, String vmIp, String floatIp) {
-        StringBuilder sql = new StringBuilder("UPDATE vm_table SET status = ?");
+        StringBuilder sql = new StringBuilder("UPDATE vm_table SET status = '" + statusCode(status) + "'");
         if (vmIp != null) {
-            sql.append(", vm_ip = ?");
+            sql.append(", vm_ip = '" + vmIp + "'");
         }
         if (floatIp != null) {
-            sql.append(", float_ip = ?");
+            sql.append(", float_ip = '" + floatIp + "'");
         }
-        sql.append(" WHERE vm_id = ?");
+        sql.append(" WHERE vm_id = '" + vmId + "'");
 
         try (Connection conn = JdbcConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql.toString())) {
-            int column = 1;
-            ps.setString(column++, statusCode(status));
-            if (vmIp != null) {
-                ps.setString(column++, vmIp);
-            }
-            if (floatIp != null) {
-                ps.setString(column++, floatIp);
-            }
-            ps.setString(column, vmId);
-            ps.executeUpdate();
+             Statement statement = conn.createStatement()) {
+            statement.executeUpdate(sql.toString());
         } catch (SQLException e) {
             throw failure("sync VM " + vmId, e);
         }
     }
 
     public boolean delete(String vmId, String userId) {
-        String sql = "DELETE FROM vm_table WHERE vm_id = ? AND user_id = ?";
+        String sql = "DELETE FROM vm_table WHERE vm_id = '" + vmId
+                + "' AND user_id = '" + userId + "'";
         try (Connection conn = JdbcConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, vmId);
-            ps.setString(2, userId);
-            return ps.executeUpdate() > 0;
+             Statement statement = conn.createStatement()) {
+            return statement.executeUpdate(sql) > 0;
         } catch (SQLException e) {
             throw failure("delete VM " + vmId, e);
         }
     }
 
     public boolean existsByName(String userId, String vmName) {
-        String sql = "SELECT 1 FROM vm_table WHERE user_id = ? AND vm_name = ?";
+        String sql = "SELECT 1 FROM vm_table WHERE user_id = '" + userId
+                + "' AND vm_name = '" + vmName + "'";
         try (Connection conn = JdbcConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, userId);
-            ps.setString(2, vmName);
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next();
-            }
+             Statement statement = conn.createStatement();
+             ResultSet rs = statement.executeQuery(sql)) {
+            return rs.next();
         } catch (SQLException e) {
             throw failure("look up VM named " + vmName, e);
         }

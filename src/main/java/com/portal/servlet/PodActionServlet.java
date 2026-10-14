@@ -5,7 +5,6 @@ import com.portal.dao.UserDao;
 import com.portal.model.PodDetails;
 import com.portal.model.Status;
 import com.portal.service.ServiceRegistry;
-import com.portal.util.WebUtil;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -17,7 +16,10 @@ import java.util.Set;
 
 public class PodActionServlet extends BaseServlet {
 
-    private static final Set<String> SUPPORTED_ACTIONS = Set.of("restart", "stop", "delete");
+    private static final long serialVersionUID = 1L;
+
+    private static final Set<String> SUPPORTED_ACTIONS =
+            Set.of("start", "stop", "restart", "delete");
 
     private final PodDao podDao = new PodDao();
     private final UserDao userDao = new UserDao();
@@ -26,13 +28,13 @@ public class PodActionServlet extends BaseServlet {
     protected void doPost(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
 
-        if (!requireSession(request, response)) {
+        String userId = requireLogin(request, response);
+        if (userId == null) {
             return;
         }
-        String userId = currentUser(request);
 
-        String podId = WebUtil.param(request, "id");
-        String action = WebUtil.param(request, "action");
+        String podId = param(request, "id");
+        String action = param(request, "action");
 
         if (podId == null || action == null) {
             sendError(response, HttpServletResponse.SC_BAD_REQUEST, "id and action are required");
@@ -45,15 +47,13 @@ public class PodActionServlet extends BaseServlet {
         }
 
         PodDetails pod = podDao.findByIdAndUser(podId, userId);
-        if (!requireOwner(pod == null ? null : pod.getUserId(), userId, response)) {
+        if (!requireOwned(pod, PodDetails::getUserId, userId, response)) {
             return;
         }
 
         Status status;
         try {
-            status = "restart".equals(verb)
-                    ? restartPod(pod, userId)
-                    : deletePod(pod, userId);
+            status = apply(verb, pod, userId);
         } catch (RuntimeException e) {
             getServletContext().log("Kubernetes action " + verb + " failed for " + podId, e);
             podDao.updateStatus(podId, userId, Status.ERROR);
@@ -68,25 +68,36 @@ public class PodActionServlet extends BaseServlet {
                 "status", status.code()));
     }
 
-    private Status restartPod(PodDetails pod, String userId) {
+    private Status apply(String verb, PodDetails pod, String userId) {
         var kubernetes = ServiceRegistry.kubernetes();
-        kubernetes.delete(pod.getNamespace(), pod.getPodName());
-
-        PodDetails recreated = kubernetes.createPod(
-                pod.getPodName(), pod.getNamespace(), pod.getImage(), pod.getPodPort());
-        recreated.setUserId(userId);
-
-        if (podDao.delete(pod.getPodId(), userId)) {
-            podDao.insert(recreated);
+        switch (verb) {
+            case "start":
+                if (kubernetes.get(pod.getNamespace(), pod.getPodName()) == null) {
+                    kubernetes.createPod(pod.getPodName(), pod.getNamespace(),
+                            pod.getImage(), pod.getPodPort());
+                    podDao.incrementRestartCount(pod.getPodId(), userId);
+                    return track(pod, userId, Status.CREATING);
+                }
+                return track(pod, userId, Status.RUNNING);
+            case "stop":
+                kubernetes.delete(pod.getNamespace(), pod.getPodName());
+                return track(pod, userId, Status.STOPPED);
+            case "restart":
+                kubernetes.recreate(pod.getNamespace(), pod.getPodName(),
+                        pod.getImage(), pod.getPodPort());
+                podDao.incrementRestartCount(pod.getPodId(), userId);
+                return track(pod, userId, Status.CREATING);
+            default:
+                kubernetes.delete(pod.getNamespace(), pod.getPodName());
+                if (podDao.delete(pod.getPodId(), userId)) {
+                    userDao.releasePodSlot(userId);
+                }
+                return Status.DELETED;
         }
-        return recreated.getStatus();
     }
 
-    private Status deletePod(PodDetails pod, String userId) {
-        ServiceRegistry.kubernetes().delete(pod.getNamespace(), pod.getPodName());
-        if (podDao.delete(pod.getPodId(), userId)) {
-            userDao.releasePodSlot(userId);
-        }
-        return Status.DELETED;
+    private Status track(PodDetails pod, String userId, Status status) {
+        podDao.updateStatus(pod.getPodId(), userId, status);
+        return status;
     }
 }

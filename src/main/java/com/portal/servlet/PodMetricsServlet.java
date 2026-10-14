@@ -4,7 +4,6 @@ import com.portal.dao.PodDao;
 import com.portal.model.PodDetails;
 import com.portal.service.PrometheusService;
 import com.portal.service.ServiceRegistry;
-import com.portal.util.WebUtil;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -16,6 +15,8 @@ import java.util.Map;
 
 public class PodMetricsServlet extends BaseServlet {
 
+    private static final long serialVersionUID = 1L;
+
     private static final String UNAVAILABLE = "metrics unavailable";
 
     private final PodDao podDao = new PodDao();
@@ -24,19 +25,17 @@ public class PodMetricsServlet extends BaseServlet {
     protected void doGet(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
 
-        if (!requireSession(request, response)) {
+        String userId = requireLogin(request, response);
+        if (userId == null) {
             return;
         }
-        String userId = currentUser(request);
-        String podId = WebUtil.param(request, "id");
-
+        String podId = requireId(request, response);
         if (podId == null) {
-            sendError(response, HttpServletResponse.SC_BAD_REQUEST, "id is required");
             return;
         }
 
         PodDetails pod = podDao.findByIdAndUser(podId, userId);
-        if (!requireOwner(pod == null ? null : pod.getUserId(), userId, response)) {
+        if (!requireOwned(pod, PodDetails::getUserId, userId, response)) {
             return;
         }
 

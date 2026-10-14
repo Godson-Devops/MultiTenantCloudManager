@@ -126,7 +126,7 @@ src/main/java/com/portal/
   dao/       MySQL access (users, vm_table, pod_table) and schema creation
   model/     User, VmDetails, PodDetails, Status
   service/   OpenStackService, KubernetesService, PrometheusService, ServiceRegistry
-  util/      JdbcConnection, AppConfig, RateLimiter, WebUtil
+  util/      JdbcConnection, AppConfig
   listener/  SyncWorkerListener: schema creation + reconciliation worker
 src/main/webapp/   11 JSP pages and js/portal.js
 ```

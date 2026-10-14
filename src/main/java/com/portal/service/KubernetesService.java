@@ -36,7 +36,7 @@ public class KubernetesService {
         if (!token.isBlank()) {
             config.withOauthToken(token);
         }
-        this.client = new KubernetesClientBuilder().withConfig(config.build()).build();
+        client = new KubernetesClientBuilder().withConfig(config.build()).build();
     }
 
     public PodDetails createPod(String podName, String namespace, String image, int port) {
@@ -69,16 +69,9 @@ public class KubernetesService {
             throw new IllegalStateException("Kubernetes returned no pod for " + podName);
         }
 
-        PodDetails details = new PodDetails();
-        details.setPodId(uidOf(created));
-        details.setPodName(created.getMetadata().getName());
-        details.setNamespace(created.getMetadata().getNamespace());
+        PodDetails details = toDetails(created);
         details.setImage(image);
         details.setPodPort(port);
-        details.setNodeName(created.getSpec() == null ? null : created.getSpec().getNodeName());
-        details.setPodIp(ipOf(created));
-        details.setRestartCount(restartCount(created));
-        details.setStatus(statusOf(created));
         return details;
     }
 
@@ -124,36 +117,74 @@ public class KubernetesService {
         }
     }
 
-    public Pod get(String namespace, String podName) {
+    public PodDetails get(String namespace, String podName) {
         if (namespace == null || podName == null) {
             return null;
         }
-        return client.pods().inNamespace(namespace).withName(podName).get();
+        Pod pod = client.pods().inNamespace(namespace).withName(podName).get();
+        return pod == null ? null : toDetails(pod);
     }
 
     public String delete(String namespace, String podName) {
-
-        String uid = uidOf(get(namespace, podName));
-        client.pods().inNamespace(namespace).withName(podName).delete();
+        PodDetails details = get(namespace, podName);
+        String uid = details == null ? null : details.getPodId();
+        client.pods().inNamespace(namespace).withName(podName).withGracePeriod(0).delete();
         return uid;
+    }
+
+    public PodDetails recreate(String namespace, String podName, String image, int port) {
+        delete(namespace, podName);
+        awaitDeletion(namespace, podName);
+        return createPod(podName, namespace, image, port);
+    }
+
+    private void awaitDeletion(String namespace, String podName) {
+        long deadline = System.currentTimeMillis() + 15_000;
+        while (System.currentTimeMillis() < deadline) {
+            if (get(namespace, podName) == null) {
+                return;
+            }
+            try {
+                Thread.sleep(200);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
     }
 
     public LogWatch watchLog(String namespace, String podName, OutputStream out) {
         return client.pods().inNamespace(namespace).withName(podName).watchLog(out);
     }
 
-    public static Status statusOf(Pod pod) {
-        if (pod == null || pod.getStatus() == null) {
+    private static Status statusOf(Pod pod) {
+        if (pod == null) {
             return Status.ERROR;
         }
-        return Status.fromPodPhase(pod.getStatus().getPhase());
+        return Status.fromPodPhase(pod.getStatus() == null ? null : pod.getStatus().getPhase());
     }
 
-    public static String ipOf(Pod pod) {
+    private static String nodeNameOf(Pod pod) {
+        return pod == null || pod.getSpec() == null ? null : pod.getSpec().getNodeName();
+    }
+
+    private static PodDetails toDetails(Pod pod) {
+        PodDetails details = new PodDetails();
+        details.setPodId(uidOf(pod));
+        details.setPodName(pod.getMetadata() == null ? null : pod.getMetadata().getName());
+        details.setNamespace(pod.getMetadata() == null ? null : pod.getMetadata().getNamespace());
+        details.setNodeName(nodeNameOf(pod));
+        details.setPodIp(ipOf(pod));
+        details.setStatus(statusOf(pod));
+        details.setRestartCount(restartCount(pod));
+        return details;
+    }
+
+    private static String ipOf(Pod pod) {
         return pod == null || pod.getStatus() == null ? null : pod.getStatus().getPodIP();
     }
 
-    public static int restartCount(Pod pod) {
+    private static int restartCount(Pod pod) {
         if (pod == null || pod.getStatus() == null
                 || pod.getStatus().getContainerStatuses() == null) {
             return 0;

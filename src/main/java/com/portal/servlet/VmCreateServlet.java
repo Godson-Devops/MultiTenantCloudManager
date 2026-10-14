@@ -4,7 +4,6 @@ import com.portal.dao.UserDao;
 import com.portal.dao.VmDao;
 import com.portal.model.VmDetails;
 import com.portal.service.ServiceRegistry;
-import com.portal.util.WebUtil;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -14,6 +13,8 @@ import java.util.Map;
 
 public class VmCreateServlet extends BaseServlet {
 
+    private static final long serialVersionUID = 1L;
+
     private final VmDao vmDao = new VmDao();
     private final UserDao userDao = new UserDao();
 
@@ -21,15 +22,15 @@ public class VmCreateServlet extends BaseServlet {
     protected void doPost(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
 
-        if (!requireSession(request, response)) {
+        String userId = requireLogin(request, response);
+        if (userId == null) {
             return;
         }
-        String userId = currentUser(request);
 
-        String vmName = WebUtil.param(request, "vmName");
-        String image = WebUtil.param(request, "image");
-        String flavor = WebUtil.param(request, "flavor");
-        String projectName = WebUtil.param(request, "projectName");
+        String vmName = param(request, "vmName");
+        String image = param(request, "image");
+        String flavor = param(request, "flavor");
+        String projectName = param(request, "projectName");
 
         if (vmName == null || image == null || flavor == null || projectName == null) {
             sendError(response, HttpServletResponse.SC_BAD_REQUEST,
@@ -50,7 +51,12 @@ public class VmCreateServlet extends BaseServlet {
         VmDetails created;
         try {
             created = ServiceRegistry.openStack()
-                    .createVm(vmName, image, flavor, WebUtil.param(request, "keyPair"), projectName);
+                    .createVm(vmName, image, flavor, param(request, "keyPair"), projectName);
+        } catch (IllegalArgumentException e) {
+
+            userDao.releaseVmSlot(userId);
+            sendError(response, HttpServletResponse.SC_BAD_REQUEST, e.getMessage());
+            return;
         } catch (RuntimeException e) {
 
             userDao.releaseVmSlot(userId);

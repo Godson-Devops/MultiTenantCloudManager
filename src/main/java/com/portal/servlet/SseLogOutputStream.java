@@ -1,5 +1,6 @@
 package com.portal.servlet;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.Writer;
@@ -7,48 +8,57 @@ import java.nio.charset.StandardCharsets;
 
 public class SseLogOutputStream extends OutputStream {
     private final Writer writer;
-    private final StringBuilder line = new StringBuilder();
+    private final ByteArrayOutputStream line = new ByteArrayOutputStream();
 
     public SseLogOutputStream(Writer writer) {
         this.writer = writer;
     }
 
     @Override
-    public void write(int b) throws IOException {
-        char c = (char) (b & 0xFF);
-        if (c == '\r') {
-
+    public synchronized void write(int b) throws IOException {
+        if (b == '\r') {
             return;
         }
-        if (c == '\n') {
+        if (b == '\n') {
             flushLine();
             return;
         }
-        line.append(c);
+        line.write(b);
     }
 
     @Override
-    public void write(byte[] b, int off, int len) throws IOException {
+    public synchronized void write(byte[] b, int off, int len) throws IOException {
         for (int i = off; i < off + len; i++) {
             write(b[i]);
         }
     }
 
+    public synchronized void sendEvent(String event, String data) throws IOException {
+        writer.write("event: " + event + "\n");
+        writer.write("data: " + data.replace("\n", " ") + "\n\n");
+        writer.flush();
+    }
+
+    public synchronized void keepAlive() throws IOException {
+        writer.write(": keep-alive\n\n");
+        writer.flush();
+    }
+
     private void flushLine() throws IOException {
-        if (line.length() == 0) {
+        if (line.size() == 0) {
             writer.write("data: \n\n");
         } else {
             writer.write("data: ");
-            writer.write(line.toString());
+            writer.write(line.toString(StandardCharsets.UTF_8));
             writer.write("\n\n");
         }
-        line.setLength(0);
+        line.reset();
         writer.flush();
     }
 
     @Override
-    public void flush() throws IOException {
-        if (line.length() > 0) {
+    public synchronized void flush() throws IOException {
+        if (line.size() > 0) {
             flushLine();
         } else {
             writer.flush();
@@ -56,7 +66,7 @@ public class SseLogOutputStream extends OutputStream {
     }
 
     @Override
-    public void close() throws IOException {
+    public synchronized void close() throws IOException {
         flush();
         super.close();
     }

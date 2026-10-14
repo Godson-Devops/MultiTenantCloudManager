@@ -1,5 +1,8 @@
 package com.portal.model;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 public class PodDetails {
 
     private String podId;
@@ -12,6 +15,20 @@ public class PodDetails {
     private String podIp;
     private int podPort;
     private String image;
+
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("podId", podId);
+        map.put("podName", podName);
+        map.put("namespace", namespace);
+        map.put("nodeName", nodeName);
+        map.put("status", status);
+        map.put("restartCount", restartCount);
+        map.put("podIp", podIp);
+        map.put("podPort", podPort);
+        map.put("image", image);
+        return map;
+    }
 
     public String getPodId() {
         return podId;

@@ -5,7 +5,6 @@ import com.portal.dao.UserDao;
 import com.portal.model.PodDetails;
 import com.portal.service.ServiceRegistry;
 import com.portal.util.AppConfig;
-import com.portal.util.WebUtil;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -15,6 +14,8 @@ import java.util.Locale;
 import java.util.Map;
 
 public class PodCreateServlet extends BaseServlet {
+
+    private static final long serialVersionUID = 1L;
 
     private static final int MIN_PORT = 1;
     private static final int MAX_PORT = 65535;
@@ -26,14 +27,14 @@ public class PodCreateServlet extends BaseServlet {
     protected void doPost(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
 
-        if (!requireSession(request, response)) {
+        String userId = requireLogin(request, response);
+        if (userId == null) {
             return;
         }
-        String userId = currentUser(request);
 
-        String podName = WebUtil.param(request, "podName");
-        String image = WebUtil.param(request, "image");
-        String portParam = WebUtil.param(request, "port");
+        String podName = param(request, "podName");
+        String image = param(request, "image");
+        String portParam = param(request, "port");
 
         if (podName == null || image == null || portParam == null) {
             sendError(response, HttpServletResponse.SC_BAD_REQUEST,

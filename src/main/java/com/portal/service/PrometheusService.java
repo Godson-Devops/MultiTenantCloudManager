@@ -34,13 +34,18 @@ public class PrometheusService {
 
     private static final long RANGE_WINDOW_SECONDS = 15 * 60;
     private static final long RANGE_STEP_SECONDS = 30;
+    private static final long CLOCK_RESYNC_MS = 60_000;
 
     private final String baseUrl;
     private final int nodeExporterPort;
     private final CloseableHttpClient client;
 
+    private volatile long clockOffsetMillis;
+    private volatile long clockSyncedAt;
+
     public PrometheusService() {
-        this.baseUrl = AppConfig.get("prometheus.url", "http://192.168.1.169:9090");
+        this.baseUrl = AppConfig.get("prometheus.url",
+                "http://192.168.1.173:8001/api/v1/namespaces/monitoring/services/prometheus:9090/proxy");
         this.nodeExporterPort = AppConfig.getInt("prometheus.node_exporter_port", 9100);
         this.client = HttpClients.custom()
                 .setConnectionManager(PoolingHttpClientConnectionManagerBuilder.create()
@@ -103,7 +108,10 @@ public class PrometheusService {
 
     public List<double[]> rangeQuery(String promQl) {
         try {
-            long end = System.currentTimeMillis() / 1000;
+            long end = latestSampleTime(promQl);
+            if (end <= 0) {
+                end = System.currentTimeMillis() / 1000;
+            }
             long start = end - RANGE_WINDOW_SECONDS;
             String encoded = URLEncoder.encode(promQl, StandardCharsets.UTF_8);
             HttpGet get = new HttpGet(baseUrl + "/api/v1/query_range?query=" + encoded
@@ -156,17 +164,85 @@ public class PrometheusService {
             return List.of();
         }
         List<double[]> series = new ArrayList<>();
+        double offsetSeconds = clockOffsetMillis() / 1000.0;
         for (JsonNode item : result) {
             JsonNode value = item.path("value");
             if (value.isArray() && value.size() >= 2) {
-                series.add(new double[]{value.get(0).asDouble(), value.get(1).asDouble()});
+                series.add(new double[]{value.get(0).asDouble() - offsetSeconds,
+                        value.get(1).asDouble()});
             }
         }
         return series;
     }
 
+    private long latestSampleTime(String promQl) {
+        try {
+            String encoded = URLEncoder.encode(promQl, StandardCharsets.UTF_8);
+            HttpGet get = new HttpGet(baseUrl + "/api/v1/query?query=" + encoded);
+            get.setHeader("Accept", "application/json");
+            long[] result = client.execute(get, new HttpClientResponseHandler<long[]>() {
+                @Override
+                public long[] handleResponse(ClassicHttpResponse response) throws IOException {
+                    if (response.getCode() != HTTP_OK) {
+                        return new long[0];
+                    }
+                    long newest = -1;
+                    JsonNode values = MAPPER.readTree(response.getEntity().getContent())
+                            .path("data").path("result");
+                    for (JsonNode item : values) {
+                        JsonNode value = item.path("value");
+                        if (value.isArray() && value.size() >= 2) {
+                            newest = Math.max(newest, (long) (value.get(0).asDouble()));
+                        }
+                    }
+                    return new long[]{newest};
+                }
+            });
+            return result.length == 0 ? 0 : result[0];
+        } catch (IOException | RuntimeException e) {
+            return 0;
+        }
+    }
+
     private static String selector(String podName, String namespace) {
         return "{pod=\"" + podName + "\",namespace=\"" + namespace + "\"}";
+    }
+
+    private long clockOffsetMillis() {
+        long now = System.currentTimeMillis();
+        if (clockSyncedAt != 0 && now - clockSyncedAt < CLOCK_RESYNC_MS) {
+            return clockOffsetMillis;
+        }
+        long offset = fetchClockOffsetMillis();
+        clockOffsetMillis = offset;
+        clockSyncedAt = now;
+        return offset;
+    }
+
+    private long fetchClockOffsetMillis() {
+        long localStart = System.currentTimeMillis();
+        try {
+            HttpGet get = new HttpGet(baseUrl + "/api/v1/query?query=time()");
+            get.setHeader("Accept", "application/json");
+            Long promNow = client.execute(get, new HttpClientResponseHandler<Long>() {
+                @Override
+                public Long handleResponse(ClassicHttpResponse response) throws IOException {
+                    if (response.getCode() != HTTP_OK) {
+                        return null;
+                    }
+                    JsonNode result = MAPPER.readTree(response.getEntity().getContent())
+                            .path("data").path("result");
+                    if (result.isArray() && result.size() >= 1 && result.get(0).isNumber()) {
+                        return (long) (result.get(0).asDouble() * 1000);
+                    }
+                    return null;
+                }
+            });
+            return promNow == null ? 0L : promNow - localStart;
+        } catch (IOException | RuntimeException e) {
+            LOG.debug("Prometheus clock query failed: {}", e.toString());
+            return 0L;
+        }
     }
 
     private List<double[]> parseMatrix(InputStream json) throws IOException {
@@ -175,6 +251,7 @@ public class PrometheusService {
             return List.of();
         }
         Map<Long, Double> merged = new TreeMap<>();
+        long offset = clockOffsetMillis();
         for (JsonNode item : result) {
             JsonNode values = item.path("values");
             if (!values.isArray()) {
@@ -182,7 +259,7 @@ public class PrometheusService {
             }
             for (JsonNode sample : values) {
                 if (sample.isArray() && sample.size() >= 2) {
-                    long ts = (long) (sample.get(0).asDouble() * 1000);
+                    long ts = (long) (sample.get(0).asDouble() * 1000) - offset;
                     merged.merge(ts, sample.get(1).asDouble(), Double::sum);
                 }
             }

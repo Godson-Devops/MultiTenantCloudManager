@@ -4,7 +4,6 @@ import com.portal.dao.VmDao;
 import com.portal.model.VmDetails;
 import com.portal.service.PrometheusService;
 import com.portal.service.ServiceRegistry;
-import com.portal.util.WebUtil;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -16,6 +15,8 @@ import java.util.Map;
 
 public class VmMetricsServlet extends BaseServlet {
 
+    private static final long serialVersionUID = 1L;
+
     private static final String UNAVAILABLE = "metrics unavailable";
 
     private final VmDao vmDao = new VmDao();
@@ -24,19 +25,17 @@ public class VmMetricsServlet extends BaseServlet {
     protected void doGet(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
 
-        if (!requireSession(request, response)) {
+        String userId = requireLogin(request, response);
+        if (userId == null) {
             return;
         }
-        String userId = currentUser(request);
-        String vmId = WebUtil.param(request, "id");
-
+        String vmId = requireId(request, response);
         if (vmId == null) {
-            sendError(response, HttpServletResponse.SC_BAD_REQUEST, "id is required");
             return;
         }
 
         VmDetails vm = vmDao.findByIdAndUser(vmId, userId);
-        if (!requireOwner(vm == null ? null : vm.getUserId(), userId, response)) {
+        if (!requireOwned(vm, VmDetails::getUserId, userId, response)) {
             return;
         }
 
