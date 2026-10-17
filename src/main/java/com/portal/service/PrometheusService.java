@@ -75,15 +75,17 @@ public class PrometheusService {
     }
 
     public List<double[]> queryVmDisk(String vmIp) {
-        return rangeQuery("(node_filesystem_avail_bytes{instance=\""
-                + nodeExporterInstance(vmIp) + "\",mountpoint=\"/\"}) * -1");
+        String instance = nodeExporterInstance(vmIp);
+        return rangeQuery("sum(node_filesystem_size_bytes{instance=\"" + instance
+                + "\",mountpoint=\"/\"} - node_filesystem_avail_bytes{instance=\""
+                + instance + "\",mountpoint=\"/\"})");
     }
 
     public List<double[]> queryVmNetwork(String vmIp) {
         String instance = nodeExporterInstance(vmIp);
-        return rangeQuery("sum(rate(node_network_receive_bytes_total{instance=\"" + instance + "\"}"
-                + RATE_WINDOW + ") + rate(node_network_transmit_bytes_total{instance=\""
-                + instance + "\"}" + RATE_WINDOW + "))");
+        return rangeQuery("sum(rate(node_network_receive_bytes_total{instance=\"" + instance
+                + "\",device!=\"lo\"}" + RATE_WINDOW + ") + rate(node_network_transmit_bytes_total{instance=\""
+                + instance + "\",device!=\"lo\"}" + RATE_WINDOW + "))");
     }
 
     public List<double[]> queryVmUp(String vmIp) {
@@ -92,11 +94,12 @@ public class PrometheusService {
 
     public List<double[]> queryPodCpu(String podName, String namespace) {
         return rangeQuery("sum(rate(container_cpu_usage_seconds_total"
-                + selector(podName, namespace) + RATE_WINDOW + "))");
+                + selector(podName, namespace, "image=\"\"") + RATE_WINDOW + "))");
     }
 
     public List<double[]> queryPodMemory(String podName, String namespace) {
-        return rangeQuery("sum(container_memory_usage_bytes" + selector(podName, namespace) + ")");
+        return rangeQuery("sum(container_memory_usage_bytes"
+                + selector(podName, namespace, "image=\"\"") + ")");
     }
 
     public List<double[]> queryPodNetwork(String podName, String namespace) {
@@ -205,7 +208,12 @@ public class PrometheusService {
     }
 
     private static String selector(String podName, String namespace) {
-        return "{pod=\"" + podName + "\",namespace=\"" + namespace + "\"}";
+        return selector(podName, namespace, null);
+    }
+
+    private static String selector(String podName, String namespace, String extra) {
+        return "{pod=\"" + podName + "\",namespace=\"" + namespace + "\""
+                + (extra == null || extra.isEmpty() ? "" : "," + extra) + "}";
     }
 
     private long clockOffsetMillis() {

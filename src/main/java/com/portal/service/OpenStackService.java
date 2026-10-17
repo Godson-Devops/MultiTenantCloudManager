@@ -16,6 +16,7 @@ import org.openstack4j.model.compute.RebootType;
 import org.openstack4j.model.compute.Server;
 import org.openstack4j.model.compute.ServerCreate;
 import org.openstack4j.model.compute.builder.ServerCreateBuilder;
+import org.openstack4j.model.identity.v3.Token;
 import org.openstack4j.model.network.NetFloatingIP;
 import org.openstack4j.model.network.Network;
 import org.openstack4j.model.network.AttachInterfaceType;
@@ -34,15 +35,38 @@ import java.util.Map;
 public class OpenStackService {
 
     private static final Logger LOG = LoggerFactory.getLogger(OpenStackService.class);
-
     private static final int IPV4 = 4;
-
-    private static final long REFRESH_MARGIN_MS = 60_000L;
-
-    private final ThreadLocal<OSClient.OSClientV3> clients =
-            ThreadLocal.withInitial(this::authenticate);
+    private static final long REFRESH_MARGIN_MS = 5 * 60_000L;
+    private volatile Token cachedToken;
 
     public OpenStackService() {
+    }
+
+    private OSClient.OSClientV3 client() {
+        return OSFactory.clientFromToken(token());
+    }
+
+    private Token token() {
+        Token current = cachedToken;
+        if (isUsable(current)) {
+            return current;
+        }
+        synchronized (this) {
+            if (isUsable(cachedToken)) {
+                return cachedToken;
+            }
+            cachedToken = authenticate().getToken();
+            LOG.info("OpenStack token refreshed; expires {}", cachedToken.getExpires());
+            return cachedToken;
+        }
+    }
+
+    private static boolean isUsable(Token token) {
+        if (token == null) {
+            return false;
+        }
+        Date expires = token.getExpires();
+        return expires == null || expires.getTime() - System.currentTimeMillis() > REFRESH_MARGIN_MS;
     }
 
     private OSClient.OSClientV3 authenticate() {
@@ -55,16 +79,6 @@ public class OpenStackService {
                         Identifier.byName(domain))
                 .scopeToProject(Identifier.byName(project), Identifier.byName(domain))
                 .authenticate();
-    }
-
-    private OSClient.OSClientV3 client() {
-        OSClient.OSClientV3 current = clients.get();
-        Date expires = current.getToken() == null ? null : current.getToken().getExpires();
-        if (expires != null && expires.getTime() - System.currentTimeMillis() < REFRESH_MARGIN_MS) {
-            current = authenticate();
-            clients.set(current);
-        }
-        return current;
     }
 
     public VmDetails createVm(String vmName, String imageName, String flavorName,
@@ -142,8 +156,6 @@ public class OpenStackService {
                 if (portId != null && portId.equals(fip.getPortId())) {
                     return fip.getFloatingIpAddress();
                 }
-                // getDeviceId/getInstanceId may not exist in this OpenStack4j version
-
             }
         } catch (RuntimeException e) {
             LOG.warn("Could not read floating IPs: {}", e.toString());

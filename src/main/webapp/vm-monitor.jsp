@@ -42,7 +42,7 @@
       <div class="card-head">
         <div class="titles">
           <h2>MEMORY</h2>
-          <span class="sub">RAM used vs total</span>
+          <span class="sub">RAM in use</span>
         </div>
       </div>
       <div class="chart-box"><canvas id="memoryChart"></canvas></div>
@@ -59,7 +59,7 @@
     <div class="card">
       <div class="card-head">
         <div class="titles">
-          <h2>DISK IO &amp; SPACE</h2>
+          <h2>DISK SPACE</h2>
           <span class="sub">Root filesystem usage</span>
         </div>
       </div>
