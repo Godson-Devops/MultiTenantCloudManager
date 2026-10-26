@@ -5,6 +5,7 @@ import com.portal.dao.UserDao;
 import com.portal.model.PodDetails;
 import com.portal.model.Status;
 import com.portal.service.ServiceRegistry;
+import com.portal.util.AdminUsers;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -32,6 +33,9 @@ public class PodActionServlet extends BaseServlet {
         if (userId == null) {
             return;
         }
+        if (!requireCsrf(request, response)) {
+            return;
+        }
 
         String podId = param(request, "id");
         String action = param(request, "action");
@@ -46,17 +50,25 @@ public class PodActionServlet extends BaseServlet {
             return;
         }
 
-        PodDetails pod = podDao.findByIdAndUser(podId, userId);
-        if (!requireOwned(pod, PodDetails::getUserId, userId, response)) {
+        boolean admin = AdminUsers.isAdmin(userId);
+        PodDetails pod = admin ? podDao.findById(podId) : podDao.findByIdAndUser(podId, userId);
+        if (admin) {
+            if (pod == null) {
+                sendError(response, HttpServletResponse.SC_NOT_FOUND, "Pod not found");
+                return;
+            }
+        } else if (!requireOwned(pod, PodDetails::getUserId, userId, response)) {
             return;
         }
 
+        String ownerId = pod.getUserId();
+
         Status status;
         try {
-            status = apply(verb, pod, userId);
+            status = apply(verb, pod, ownerId);
         } catch (RuntimeException e) {
             getServletContext().log("Kubernetes action " + verb + " failed for " + podId, e);
-            podDao.updateStatus(podId, userId, Status.ERROR);
+            podDao.updateStatus(podId, ownerId, Status.ERROR);
             sendProviderError(response, HttpServletResponse.SC_BAD_GATEWAY,
                     "Kubernetes pod " + verb, e);
             return;

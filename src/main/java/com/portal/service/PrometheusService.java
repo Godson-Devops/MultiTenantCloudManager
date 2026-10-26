@@ -33,7 +33,6 @@ public class PrometheusService {
     private static final int HTTP_OK = 200;
 
     private static final long RANGE_WINDOW_SECONDS = 15 * 60;
-    private static final long RANGE_STEP_SECONDS = 30;
     private static final long CLOCK_RESYNC_MS = 60_000;
 
     private final String baseUrl;
@@ -53,8 +52,8 @@ public class PrometheusService {
                         .setMaxConnPerRoute(MAX_CONNECTIONS)
                         .build())
                 .setDefaultRequestConfig(RequestConfig.custom()
-                        .setResponseTimeout(Timeout.ofSeconds(QUERY_TIMEOUT_SECONDS))
                         .setConnectionRequestTimeout(Timeout.ofSeconds(QUERY_TIMEOUT_SECONDS))
+                        .setResponseTimeout(Timeout.ofSeconds(QUERY_TIMEOUT_SECONDS))
                         .build())
                 .build();
     }
@@ -63,29 +62,58 @@ public class PrometheusService {
         return vmIp + ":" + nodeExporterPort;
     }
 
+    public static long parseWindow(String range) {
+        if (range == null) {
+            return RANGE_WINDOW_SECONDS;
+        }
+        return switch (range) {
+            case "15m" -> 15 * 60L;
+            case "1h" -> 60 * 60L;
+            case "6h" -> 6 * 60 * 60L;
+            case "24h" -> 24 * 60 * 60L;
+            default -> RANGE_WINDOW_SECONDS;
+        };
+    }
+
     public List<double[]> queryVmCpu(String vmIp) {
+        return queryVmCpu(vmIp, RANGE_WINDOW_SECONDS);
+    }
+
+    public List<double[]> queryVmCpu(String vmIp, long windowSeconds) {
         return rangeQuery("100 - (avg(rate(node_cpu_seconds_total{mode=\"idle\",instance=\""
-                + nodeExporterInstance(vmIp) + "\"}" + RATE_WINDOW + ")) * 100)");
+                + nodeExporterInstance(vmIp) + "\"}" + RATE_WINDOW + ")) * 100)", windowSeconds);
     }
 
     public List<double[]> queryVmMemory(String vmIp) {
+        return queryVmMemory(vmIp, RANGE_WINDOW_SECONDS);
+    }
+
+    public List<double[]> queryVmMemory(String vmIp, long windowSeconds) {
         String instance = nodeExporterInstance(vmIp);
         return rangeQuery("node_memory_MemTotal_bytes{instance=\"" + instance + "\"}"
-                + " - node_memory_MemAvailable_bytes{instance=\"" + instance + "\"}");
+                + " - node_memory_MemAvailable_bytes{instance=\"" + instance + "\"}", windowSeconds);
     }
 
     public List<double[]> queryVmDisk(String vmIp) {
+        return queryVmDisk(vmIp, RANGE_WINDOW_SECONDS);
+    }
+
+    public List<double[]> queryVmDisk(String vmIp, long windowSeconds) {
         String instance = nodeExporterInstance(vmIp);
         return rangeQuery("sum(node_filesystem_size_bytes{instance=\"" + instance
                 + "\",mountpoint=\"/\"} - node_filesystem_avail_bytes{instance=\""
-                + instance + "\",mountpoint=\"/\"})");
+                + instance + "\",mountpoint=\"/\"})", windowSeconds);
     }
 
     public List<double[]> queryVmNetwork(String vmIp) {
+        return queryVmNetwork(vmIp, RANGE_WINDOW_SECONDS);
+    }
+
+    public List<double[]> queryVmNetwork(String vmIp, long windowSeconds) {
         String instance = nodeExporterInstance(vmIp);
         return rangeQuery("sum(rate(node_network_receive_bytes_total{instance=\"" + instance
                 + "\",device!=\"lo\"}" + RATE_WINDOW + ") + rate(node_network_transmit_bytes_total{instance=\""
-                + instance + "\",device!=\"lo\"}" + RATE_WINDOW + "))");
+                + instance + "\",device!=\"lo\"}" + RATE_WINDOW + "))", windowSeconds);
     }
 
     public List<double[]> queryVmUp(String vmIp) {
@@ -93,32 +121,49 @@ public class PrometheusService {
     }
 
     public List<double[]> queryPodCpu(String podName, String namespace) {
+        return queryPodCpu(podName, namespace, RANGE_WINDOW_SECONDS);
+    }
+
+    public List<double[]> queryPodCpu(String podName, String namespace, long windowSeconds) {
         return rangeQuery("sum(rate(container_cpu_usage_seconds_total"
-                + selector(podName, namespace, "image=\"\"") + RATE_WINDOW + "))");
+                + selector(podName, namespace, "image=\"\"") + RATE_WINDOW + "))", windowSeconds);
     }
 
     public List<double[]> queryPodMemory(String podName, String namespace) {
+        return queryPodMemory(podName, namespace, RANGE_WINDOW_SECONDS);
+    }
+
+    public List<double[]> queryPodMemory(String podName, String namespace, long windowSeconds) {
         return rangeQuery("sum(container_memory_usage_bytes"
-                + selector(podName, namespace, "image=\"\"") + ")");
+                + selector(podName, namespace, "image=\"\"") + ")", windowSeconds);
     }
 
     public List<double[]> queryPodNetwork(String podName, String namespace) {
+        return queryPodNetwork(podName, namespace, RANGE_WINDOW_SECONDS);
+    }
+
+    public List<double[]> queryPodNetwork(String podName, String namespace, long windowSeconds) {
         return rangeQuery("sum(rate(container_network_transmit_bytes_total"
                 + selector(podName, namespace) + RATE_WINDOW
                 + ") + rate(container_network_receive_bytes_total"
-                + selector(podName, namespace) + RATE_WINDOW + "))");
+                + selector(podName, namespace) + RATE_WINDOW + "))", windowSeconds);
     }
 
     public List<double[]> rangeQuery(String promQl) {
+        return rangeQuery(promQl, RANGE_WINDOW_SECONDS);
+    }
+
+    private List<double[]> rangeQuery(String promQl, long windowSeconds) {
         try {
             long end = latestSampleTime(promQl);
             if (end <= 0) {
                 end = System.currentTimeMillis() / 1000;
             }
-            long start = end - RANGE_WINDOW_SECONDS;
+            long start = end - Math.max(60, windowSeconds);
+            long step = Math.max(15, windowSeconds / 60);
             String encoded = URLEncoder.encode(promQl, StandardCharsets.UTF_8);
             HttpGet get = new HttpGet(baseUrl + "/api/v1/query_range?query=" + encoded
-                    + "&start=" + start + "&end=" + end + "&step=" + RANGE_STEP_SECONDS);
+                    + "&start=" + start + "&end=" + end + "&step=" + step);
             get.setHeader("Accept", "application/json");
 
             return client.execute(get, new HttpClientResponseHandler<List<double[]>>() {

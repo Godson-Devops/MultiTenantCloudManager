@@ -4,6 +4,7 @@ import com.portal.dao.PodDao;
 import com.portal.model.PodDetails;
 import com.portal.model.Status;
 import com.portal.service.ServiceRegistry;
+import com.portal.util.AdminUsers;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -30,8 +31,14 @@ public class PodDetailServlet extends BaseServlet {
             return;
         }
 
-        PodDetails pod = podDao.findByIdAndUser(podId, userId);
-        if (!requireOwned(pod, PodDetails::getUserId, userId, response)) {
+        boolean admin = AdminUsers.isAdmin(userId);
+        PodDetails pod = admin ? podDao.findById(podId) : podDao.findByIdAndUser(podId, userId);
+        if (admin) {
+            if (pod == null) {
+                sendError(response, HttpServletResponse.SC_NOT_FOUND, "Pod not found");
+                return;
+            }
+        } else if (!requireOwned(pod, PodDetails::getUserId, userId, response)) {
             return;
         }
 

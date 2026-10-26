@@ -4,6 +4,7 @@ import com.portal.dao.VmDao;
 import com.portal.model.VmDetails;
 import com.portal.service.OpenStackService;
 import com.portal.service.ServiceRegistry;
+import com.portal.util.AdminUsers;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -30,8 +31,14 @@ public class VmDetailServlet extends BaseServlet {
             return;
         }
 
-        VmDetails vm = vmDao.findByIdAndUser(vmId, userId);
-        if (!requireOwned(vm, VmDetails::getUserId, userId, response)) {
+        boolean admin = AdminUsers.isAdmin(userId);
+        VmDetails vm = admin ? vmDao.findById(vmId) : vmDao.findByIdAndUser(vmId, userId);
+        if (admin) {
+            if (vm == null) {
+                sendError(response, HttpServletResponse.SC_NOT_FOUND, "VM not found");
+                return;
+            }
+        } else if (!requireOwned(vm, VmDetails::getUserId, userId, response)) {
             return;
         }
 

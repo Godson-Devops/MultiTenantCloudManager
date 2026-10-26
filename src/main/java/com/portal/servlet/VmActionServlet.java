@@ -5,6 +5,7 @@ import com.portal.dao.VmDao;
 import com.portal.model.Status;
 import com.portal.model.VmDetails;
 import com.portal.service.ServiceRegistry;
+import com.portal.util.AdminUsers;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -32,6 +33,9 @@ public class VmActionServlet extends BaseServlet {
         if (userId == null) {
             return;
         }
+        if (!requireCsrf(request, response)) {
+            return;
+        }
 
         String vmId = param(request, "id");
         String action = param(request, "action");
@@ -46,17 +50,25 @@ public class VmActionServlet extends BaseServlet {
             return;
         }
 
-        VmDetails vm = vmDao.findByIdAndUser(vmId, userId);
-        if (!requireOwned(vm, VmDetails::getUserId, userId, response)) {
+        boolean admin = AdminUsers.isAdmin(userId);
+        VmDetails vm = admin ? vmDao.findById(vmId) : vmDao.findByIdAndUser(vmId, userId);
+        if (admin) {
+            if (vm == null) {
+                sendError(response, HttpServletResponse.SC_NOT_FOUND, "VM not found");
+                return;
+            }
+        } else if (!requireOwned(vm, VmDetails::getUserId, userId, response)) {
             return;
         }
 
+        String ownerId = vm.getUserId();
+
         Status status;
         try {
-            status = apply(verb, vmId, userId);
+            status = apply(verb, vmId, ownerId);
         } catch (RuntimeException e) {
             getServletContext().log("OpenStack action " + verb + " failed for " + vmId, e);
-            vmDao.updateStatus(vmId, userId, Status.ERROR);
+            vmDao.updateStatus(vmId, ownerId, Status.ERROR);
             sendProviderError(response, HttpServletResponse.SC_BAD_GATEWAY,
                     "OpenStack VM " + verb, e);
             return;
@@ -68,29 +80,29 @@ public class VmActionServlet extends BaseServlet {
                 "status", status.code()));
     }
 
-    private Status apply(String verb, String vmId, String userId) {
+    private Status apply(String verb, String vmId, String ownerId) {
         switch (verb) {
             case "start":
                 ServiceRegistry.openStack().start(vmId);
-                return track(vmId, userId, Status.RUNNING);
+                return track(vmId, ownerId, Status.RUNNING);
             case "stop":
                 ServiceRegistry.openStack().stop(vmId);
-                return track(vmId, userId, Status.STOPPED);
+                return track(vmId, ownerId, Status.STOPPED);
             case "restart":
                 ServiceRegistry.openStack().restart(vmId);
 
-                return track(vmId, userId, Status.RUNNING);
+                return track(vmId, ownerId, Status.RUNNING);
             default:
                 ServiceRegistry.openStack().delete(vmId);
-                if (vmDao.delete(vmId, userId)) {
-                    userDao.releaseVmSlot(userId);
+                if (vmDao.delete(vmId, ownerId)) {
+                    userDao.releaseVmSlot(ownerId);
                 }
                 return Status.DELETED;
         }
     }
 
-    private Status track(String vmId, String userId, Status status) {
-        vmDao.updateStatus(vmId, userId, status);
+    private Status track(String vmId, String ownerId, Status status) {
+        vmDao.updateStatus(vmId, ownerId, status);
         return status;
     }
 }

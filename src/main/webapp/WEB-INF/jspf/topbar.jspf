@@ -1,0 +1,38 @@
+<%@ page import="com.portal.util.AdminUsers" %>
+<%@ page import="com.portal.util.Html" %>
+<%
+  Object topbarUserValue = session.getAttribute("user_id");
+  String topbarUser = topbarUserValue == null ? "" : topbarUserValue.toString();
+  boolean topbarAdmin = AdminUsers.isAdmin(topbarUser);
+  boolean topbarPopup = "1".equals(request.getParameter("popup"));
+  String topbarTitle = String.valueOf(request.getAttribute("pageHeading") == null
+      ? "Cloud Provisioning Portal" : request.getAttribute("pageHeading"));
+  String topbarActive = String.valueOf(request.getAttribute("activeTab") == null
+      ? "" : request.getAttribute("activeTab"));
+%>
+<% if (!topbarPopup) { %>
+<header class="topbar">
+  <h1><%= Html.escape(topbarTitle) %></h1>
+  <nav class="tabs" aria-label="Main navigation">
+    <a href="vm-dashboard.jsp" class="<%= "vms".equals(topbarActive) ? "active" : "" %>"
+       <%= "vms".equals(topbarActive) ? "aria-current=\"page\"" : "" %>>VMs</a>
+    <a href="pod-dashboard.jsp" class="<%= "pods".equals(topbarActive) ? "active" : "" %>"
+       <%= "pods".equals(topbarActive) ? "aria-current=\"page\"" : "" %>>Pods</a>
+    <% if (topbarAdmin) { %>
+      <a href="admin-vm-dashboard.jsp" class="<%= "admin-vms".equals(topbarActive) ? "active" : "" %>"
+         <%= "admin-vms".equals(topbarActive) ? "aria-current=\"page\"" : "" %>>All VMs</a>
+      <a href="admin-pod-dashboard.jsp" class="<%= "admin-pods".equals(topbarActive) ? "active" : "" %>"
+         <%= "admin-pods".equals(topbarActive) ? "aria-current=\"page\"" : "" %>>All Pods</a>
+    <% } %>
+    <span class="user-chip">
+      <% if (topbarAdmin) { %><span class="role-badge">ADMIN</span><% } %>
+      <%= Html.escape(topbarUser) %> &middot;
+      <a href="#" onclick="document.getElementById('logoutForm').submit(); return false;">Logout</a>
+    </span>
+  </nav>
+</header>
+
+<form id="logoutForm" method="post" action="logout" hidden>
+  <input type="hidden" name="_csrf" value="<%= Html.escape(csrfToken) %>">
+</form>
+<% } %>

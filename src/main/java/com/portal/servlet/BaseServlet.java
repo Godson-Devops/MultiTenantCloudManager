@@ -1,6 +1,8 @@
 package com.portal.servlet;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.portal.util.AdminUsers;
+import com.portal.util.Csrf;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -45,6 +47,30 @@ public abstract class BaseServlet extends HttpServlet {
         String userId = currentUser(request);
         if (userId == null) {
             sendError(response, HttpServletResponse.SC_UNAUTHORIZED, "Not logged in");
+            return null;
+        }
+        return userId;
+    }
+
+    protected boolean requireCsrf(HttpServletRequest request, HttpServletResponse response)
+            throws IOException {
+        if (Csrf.verify(request)) {
+            return true;
+        }
+        sendError(response, HttpServletResponse.SC_FORBIDDEN,
+                "Your form session expired. Reload the page and try again.");
+        return false;
+    }
+
+    protected String requireAdmin(HttpServletRequest request, HttpServletResponse response)
+            throws IOException {
+        String userId = requireLogin(request, response);
+        if (userId == null) {
+            return null;
+        }
+        if (!AdminUsers.isAdmin(userId)) {
+            sendError(response, HttpServletResponse.SC_FORBIDDEN,
+                    "Administrator access required");
             return null;
         }
         return userId;

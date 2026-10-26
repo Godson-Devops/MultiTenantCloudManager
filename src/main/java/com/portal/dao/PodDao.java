@@ -42,6 +42,20 @@ public class PodDao {
         }
     }
 
+    public PodDetails findById(String podId) {
+        if (podId == null) {
+            return null;
+        }
+        String sql = SELECT_COLUMNS + " WHERE pod_id = '" + podId + "'";
+        try (Connection conn = JdbcConnection.getConnection();
+             Statement statement = conn.createStatement();
+             ResultSet rs = statement.executeQuery(sql)) {
+            return rs.next() ? map(rs) : null;
+        } catch (SQLException e) {
+            throw failure("load pod " + podId, e);
+        }
+    }
+
     public PodDetails findByIdAndUser(String podId, String userId) {
         if (podId == null || userId == null) {
             return null;

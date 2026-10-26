@@ -1,0 +1,4 @@
+<%@ page import="com.portal.util.Csrf" %>
+<%
+  String csrfToken = Csrf.token(session);
+%>

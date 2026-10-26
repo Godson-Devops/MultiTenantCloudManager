@@ -31,14 +31,23 @@ public class PodCreateServlet extends BaseServlet {
         if (userId == null) {
             return;
         }
+        if (!requireCsrf(request, response)) {
+            return;
+        }
 
-        String podName = param(request, "podName");
+        String requestedName = param(request, "podName");
         String image = param(request, "image");
         String portParam = param(request, "port");
 
-        if (podName == null || image == null || portParam == null) {
+        if (requestedName == null || image == null || portParam == null) {
             sendError(response, HttpServletResponse.SC_BAD_REQUEST,
                     "podName, image and port are required");
+            return;
+        }
+        String podName = normalizePodName(requestedName);
+        if (podName.isEmpty()) {
+            sendError(response, HttpServletResponse.SC_BAD_REQUEST,
+                    "podName must contain at least one letter or number");
             return;
         }
         int port = parsePort(portParam, response);
@@ -109,6 +118,17 @@ public class PodCreateServlet extends BaseServlet {
         } catch (RuntimeException ignored) {
             getServletContext().log("Orphaned Kubernetes pod " + created.getPodName(), ignored);
         }
+    }
+
+    static String normalizePodName(String value) {
+        String cleaned = (value == null ? "" : value)
+                .toLowerCase(Locale.ROOT)
+                .replaceAll("[^a-z0-9-]+", "-")
+                .replaceAll("^-+|-+$", "");
+        if (cleaned.length() > 63) {
+            cleaned = cleaned.substring(0, 63).replaceAll("-+$", "");
+        }
+        return cleaned;
     }
 
     static String sanitize(String value) {

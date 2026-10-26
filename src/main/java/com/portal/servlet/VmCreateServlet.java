@@ -26,6 +26,9 @@ public class VmCreateServlet extends BaseServlet {
         if (userId == null) {
             return;
         }
+        if (!requireCsrf(request, response)) {
+            return;
+        }
 
         String vmName = param(request, "vmName");
         String image = param(request, "image");

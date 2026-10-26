@@ -154,7 +154,15 @@ public class KubernetesService {
     }
 
     public LogWatch watchLog(String namespace, String podName, OutputStream out) {
-        return client.pods().inNamespace(namespace).withName(podName).watchLog(out);
+        return watchLog(namespace, podName, out, null);
+    }
+
+    public LogWatch watchLog(String namespace, String podName, OutputStream out, String since) {
+        var resource = client.pods().inNamespace(namespace).withName(podName);
+        if (since != null && !since.isBlank()) {
+            return resource.usingTimestamps().sinceTime(since).watchLog(out);
+        }
+        return resource.usingTimestamps().watchLog(out);
     }
 
     private static Status statusOf(Pod pod) {

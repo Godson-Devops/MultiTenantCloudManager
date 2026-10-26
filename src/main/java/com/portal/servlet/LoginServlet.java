@@ -21,6 +21,10 @@ public class LoginServlet extends BaseServlet {
     protected void doPost(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
 
+        if (!requireCsrf(request, response)) {
+            return;
+        }
+
         String userId = param(request, "userId");
         String password = param(request, "password");
 

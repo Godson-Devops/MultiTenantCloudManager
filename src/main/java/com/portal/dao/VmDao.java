@@ -45,6 +45,20 @@ public class VmDao {
         }
     }
 
+    public VmDetails findById(String vmId) {
+        if (vmId == null) {
+            return null;
+        }
+        String sql = SELECT_COLUMNS + " WHERE vm_id = '" + vmId + "'";
+        try (Connection conn = JdbcConnection.getConnection();
+             Statement statement = conn.createStatement();
+             ResultSet rs = statement.executeQuery(sql)) {
+            return rs.next() ? map(rs) : null;
+        } catch (SQLException e) {
+            throw failure("load VM " + vmId, e);
+        }
+    }
+
     public VmDetails findByIdAndUser(String vmId, String userId) {
         if (vmId == null || userId == null) {
             return null;

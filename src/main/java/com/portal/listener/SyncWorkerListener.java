@@ -2,6 +2,7 @@ package com.portal.listener;
 
 import com.portal.dao.SchemaManager;
 import com.portal.dao.PodDao;
+import com.portal.dao.UserDao;
 import com.portal.dao.VmDao;
 import com.portal.model.PodDetails;
 import com.portal.model.Status;
@@ -26,6 +27,7 @@ public class SyncWorkerListener implements ServletContextListener {
 
     private final VmDao vmDao = new VmDao();
     private final PodDao podDao = new PodDao();
+    private final UserDao userDao = new UserDao();
 
     private ScheduledExecutorService scheduler;
     private boolean schemaReady;
@@ -67,6 +69,12 @@ public class SyncWorkerListener implements ServletContextListener {
         }
 
         try {
+            seedAdmin();
+        } catch (RuntimeException e) {
+            LOG.warn("admin seeding failed: {}", e.toString());
+        }
+
+        try {
             syncVms(ServiceRegistry.openStack());
         } catch (RuntimeException e) {
             LOG.warn("VM sync failed: {}", e.toString());
@@ -84,6 +92,23 @@ public class SyncWorkerListener implements ServletContextListener {
             schemaReady = SchemaManager.ensure();
         }
         return schemaReady;
+    }
+
+    private void seedAdmin() {
+        if (!ensureSchema()) {
+            return;
+        }
+        String user = AppConfig.get("admin.bootstrap_user", "");
+        String password = AppConfig.get("admin.bootstrap_password", "");
+        if (user.isBlank() || password.isBlank()) {
+            return;
+        }
+        if (userDao.exists(user)) {
+            return;
+        }
+        if (userDao.createUser(user, password)) {
+            LOG.info("Seeded admin account '{}'", user);
+        }
     }
 
     private void syncVms(OpenStackService openStack) {

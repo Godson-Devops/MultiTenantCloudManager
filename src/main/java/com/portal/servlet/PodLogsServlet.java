@@ -3,6 +3,7 @@ package com.portal.servlet;
 import com.portal.dao.PodDao;
 import com.portal.model.PodDetails;
 import com.portal.service.ServiceRegistry;
+import com.portal.util.AdminUsers;
 import com.portal.util.AppConfig;
 import io.fabric8.kubernetes.client.dsl.LogWatch;
 import jakarta.servlet.ServletException;
@@ -36,9 +37,19 @@ public class PodLogsServlet extends BaseServlet {
         if (podId == null) {
             return;
         }
+        String since = param(request, "since");
+        if (since != null && !since.matches("[0-9T:.+\\-Z]{12,64}")) {
+            since = null;
+        }
 
-        PodDetails pod = podDao.findByIdAndUser(podId, userId);
-        if (!requireOwned(pod, PodDetails::getUserId, userId, response)) {
+        boolean admin = AdminUsers.isAdmin(userId);
+        PodDetails pod = admin ? podDao.findById(podId) : podDao.findByIdAndUser(podId, userId);
+        if (admin) {
+            if (pod == null) {
+                sendError(response, HttpServletResponse.SC_NOT_FOUND, "Pod not found");
+                return;
+            }
+        } else if (!requireOwned(pod, PodDetails::getUserId, userId, response)) {
             return;
         }
 
@@ -53,7 +64,7 @@ public class PodLogsServlet extends BaseServlet {
         LogWatch watch = null;
         try {
             watch = ServiceRegistry.kubernetes()
-                    .watchLog(pod.getNamespace(), pod.getPodName(), sink);
+                    .watchLog(pod.getNamespace(), pod.getPodName(), sink, since);
 
             sink.sendEvent("open", "streaming logs for " + pod.getPodName());
 

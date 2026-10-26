@@ -26,7 +26,9 @@ import org.openstack4j.openstack.OSFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
@@ -37,6 +39,12 @@ public class OpenStackService {
     private static final Logger LOG = LoggerFactory.getLogger(OpenStackService.class);
     private static final int IPV4 = 4;
     private static final long REFRESH_MARGIN_MS = 5 * 60_000L;
+    private static final long GIB = 1024L * 1024L * 1024L;
+    private static final java.net.http.HttpClient HTTP = java.net.http.HttpClient.newBuilder()
+            .connectTimeout(java.time.Duration.ofSeconds(5))
+            .build();
+    private static final com.fasterxml.jackson.databind.ObjectMapper JSON =
+            new com.fasterxml.jackson.databind.ObjectMapper();
     private volatile Token cachedToken;
 
     public OpenStackService() {
@@ -84,7 +92,9 @@ public class OpenStackService {
     public VmDetails createVm(String vmName, String imageName, String flavorName,
                               String keyPair, String projectName) {
         String imageId = resolveImageId(imageName);
-        String flavorId = resolveFlavorId(flavorName);
+        Flavor selectedFlavor = resolveFlavor(flavorName);
+        validateDiskFits(imageName, imageId, selectedFlavor);
+        String flavorId = selectedFlavor.getId();
         String keyName = resolveKeypair(keyPair);
         String networkId = resolveNetworkId();
 
@@ -95,6 +105,14 @@ public class OpenStackService {
                 .networks(List.of(networkId));
         if (keyName != null) {
             builder.keypairName(keyName);
+        }
+        try {
+            String userData = buildNodeExporterUserData();
+            if (userData != null) {
+                builder.userData(Base64.getEncoder().encodeToString(userData.getBytes(StandardCharsets.UTF_8)));
+            }
+        } catch (RuntimeException e) {
+            LOG.warn("Failed to prepare node_exporter user-data: {}", e.toString());
         }
         ServerCreate spec = builder.build();
 
@@ -354,23 +372,91 @@ public class OpenStackService {
                 "No image matching '" + image + "'. Available images: " + names(images));
     }
 
-    private String resolveFlavorId(String flavor) {
+    private Flavor resolveFlavor(String flavor) {
         if (flavor == null || flavor.isBlank()) {
             throw new IllegalArgumentException("Flavor name is required");
         }
         List<? extends Flavor> flavors = client().compute().flavors().list();
         for (Flavor candidate : flavors) {
             if (flavor.equals(candidate.getId())) {
-                return candidate.getId();
+                return candidate;
             }
         }
         for (Flavor candidate : flavors) {
             if (flavor.equalsIgnoreCase(candidate.getName())) {
-                return candidate.getId();
+                return candidate;
             }
         }
         throw new IllegalArgumentException(
                 "No flavor matching '" + flavor + "'. Available flavors: " + flavorNames(flavors));
+    }
+
+    private void validateDiskFits(String imageName, String imageId, Flavor flavor) {
+        if (flavor == null || flavor.getDisk() <= 0) {
+            return;
+        }
+        long requiredBytes = glanceVirtualSize(imageId);
+        if (requiredBytes <= 0) {
+            return;
+        }
+        long availableBytes = flavor.getDisk() * GIB;
+        if (requiredBytes > availableBytes) {
+            long requiredGb = (requiredBytes + GIB - 1) / GIB;
+            throw new IllegalArgumentException("Image '" + imageName + "' needs at least "
+                    + requiredGb + " GB of disk, but flavor '" + flavor.getName() + "' only provides "
+                    + flavor.getDisk() + " GB. Choose a larger flavor.");
+        }
+    }
+
+    private long glanceVirtualSize(String imageId) {
+        try {
+            String token = client().getToken().getId();
+            String endpoint = imageEndpoint();
+            if (token == null || endpoint == null) {
+                return -1;
+            }
+            String base = endpoint.endsWith("/")
+                    ? endpoint.substring(0, endpoint.length() - 1)
+                    : endpoint;
+            java.net.http.HttpRequest request = java.net.http.HttpRequest
+                    .newBuilder(java.net.URI.create(base + "/v2/images/" + imageId))
+                    .header("X-Auth-Token", token)
+                    .timeout(java.time.Duration.ofSeconds(5))
+                    .GET()
+                    .build();
+            java.net.http.HttpResponse<String> response = HTTP.send(request,
+                    java.net.http.HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() != 200) {
+                return -1;
+            }
+            com.fasterxml.jackson.databind.JsonNode node = JSON.readTree(response.body());
+            return node.path("virtual_size").asLong(-1);
+        } catch (Exception e) {
+            LOG.warn("Could not read Glance virtual size for image {}: {}", imageId, e.toString());
+            return -1;
+        }
+    }
+
+    private String imageEndpoint() {
+        for (org.openstack4j.model.identity.v3.Service service : client().getToken().getCatalog()) {
+            if (!"image".equals(service.getType())) {
+                continue;
+            }
+            String fallback = null;
+            for (org.openstack4j.model.identity.v3.Endpoint endpoint : service.getEndpoints()) {
+                if (endpoint.getUrl() == null) {
+                    continue;
+                }
+                if (endpoint.getIface() == org.openstack4j.api.types.Facing.PUBLIC) {
+                    return endpoint.getUrl().toString();
+                }
+                fallback = endpoint.getUrl().toString();
+            }
+            if (fallback != null) {
+                return fallback;
+            }
+        }
+        return null;
     }
 
     private String resolveNetworkId() {
@@ -441,12 +527,113 @@ public class OpenStackService {
         return values.toString();
     }
 
+    private String buildNodeExporterUserData() {
+        String port = AppConfig.get("prometheus.node_exporter_port", "9100");
+        String script = "#!/bin/bash\n"
+                + "set -e\n"
+                + "export DEBIAN_FRONTEND=noninteractive\n"
+                + "if command -v apt-get >/dev/null 2>&1; then\n"
+                + "  apt-get update -y\n"
+                + "  apt-get install -y wget curl\n"
+                + "  if ! id node_exporter >/dev/null 2>&1; then\n"
+                + "    useradd --no-create-home --shell /usr/sbin/nologin node_exporter || true\n"
+                + "  fi\n"
+                + "  wget -q https://github.com/prometheus/node_exporter/releases/download/v1.8.2/node_exporter-1.8.2.linux-amd64.tar.gz -O /tmp/node_exporter.tar.gz\n"
+                + "  tar -xzf /tmp/node_exporter.tar.gz -C /tmp\n"
+                + "  cp /tmp/node_exporter-1.8.2.linux-amd64/node_exporter /usr/local/bin/\n"
+                + "  chown node_exporter:node_exporter /usr/local/bin/node_exporter\n"
+                + "  mkdir -p /etc/systemd/system/node_exporter.service.d\n"
+                + "  cat > /etc/systemd/system/node_exporter.service << 'EOF'\n"
+                + "[Unit]\n"
+                + "Description=Node Exporter\n"
+                + "After=network.target\n\n"
+                + "[Service]\n"
+                + "User=node_exporter\n"
+                + "Group=node_exporter\n"
+                + "Type=simple\n"
+                + "ExecStart=/usr/local/bin/node_exporter --web.listen-address=:" + port + "\n\n"
+                + "[Install]\n"
+                + "WantedBy=multi-user.target\n"
+                + "EOF\n"
+                + "  systemctl daemon-reload\n"
+                + "  systemctl enable --now node_exporter\n"
+                + "  rm -rf /tmp/node_exporter.tar.gz /tmp/node_exporter-1.8.2.linux-amd64\n"
+                + "elif command -v yum >/dev/null 2>&1 || command -v dnf >/dev/null 2>&1; then\n"
+                + "  (command -v dnf >/dev/null 2>&1 && dnf install -y wget curl tar) || (yum install -y wget curl tar)\n"
+                + "  if ! id node_exporter >/dev/null 2>&1; then\n"
+                + "    useradd --no-create-home --shell /sbin/nologin node_exporter || true\n"
+                + "  fi\n"
+                + "  wget -q https://github.com/prometheus/node_exporter/releases/download/v1.8.2/node_exporter-1.8.2.linux-amd64.tar.gz -O /tmp/node_exporter.tar.gz\n"
+                + "  tar -xzf /tmp/node_exporter.tar.gz -C /tmp\n"
+                + "  cp /tmp/node_exporter-1.8.2.linux-amd64/node_exporter /usr/local/bin/\n"
+                + "  chown node_exporter:node_exporter /usr/local/bin/node_exporter\n"
+                + "  cat > /etc/systemd/system/node_exporter.service << 'EOF'\n"
+                + "[Unit]\n"
+                + "Description=Node Exporter\n"
+                + "After=network.target\n\n"
+                + "[Service]\n"
+                + "User=node_exporter\n"
+                + "Group=node_exporter\n"
+                + "Type=simple\n"
+                + "ExecStart=/usr/local/bin/node_exporter --web.listen-address=:" + port + "\n\n"
+                + "[Install]\n"
+                + "WantedBy=multi-user.target\n"
+                + "EOF\n"
+                + "  systemctl daemon-reload\n"
+                + "  systemctl enable --now node_exporter\n"
+                + "  rm -rf /tmp/node_exporter.tar.gz /tmp/node_exporter-1.8.2.linux-amd64\n"
+                + "fi\n";
+        return script;
+    }
+
     private static String networkNames(List<? extends Network> networks) {
         List<String> values = new ArrayList<>();
         for (Network network : networks) {
             values.add(network.getName());
         }
         return values.toString();
+    }
+
+    public List<java.util.Map<String, String>> listImages() {
+        List<java.util.Map<String, String>> result = new ArrayList<>();
+        try {
+            List<? extends Image> images = client().compute().images().list();
+            for (Image image : images) {
+                java.util.Map<String, String> item = new java.util.HashMap<>();
+                item.put("id", image.getId());
+                item.put("name", image.getName());
+                item.put("minDiskGb", String.valueOf(image.getMinDisk()));
+                long virtualSize = glanceVirtualSize(image.getId());
+                if (virtualSize > 0) {
+                    item.put("virtualSize", String.valueOf(virtualSize));
+                } else if (image.getSize() > 0) {
+                    item.put("sizeBytes", String.valueOf(image.getSize()));
+                }
+                result.add(item);
+            }
+        } catch (RuntimeException e) {
+            throw e;
+        }
+        return result;
+    }
+
+    public List<java.util.Map<String, String>> listFlavors() {
+        List<java.util.Map<String, String>> result = new ArrayList<>();
+        try {
+            List<? extends Flavor> flavors = client().compute().flavors().list();
+            for (Flavor flavor : flavors) {
+                java.util.Map<String, String> item = new java.util.HashMap<>();
+                item.put("id", flavor.getId());
+                item.put("name", flavor.getName());
+                item.put("vcpus", String.valueOf(flavor.getVcpus()));
+                item.put("ramMb", String.valueOf(flavor.getRam()));
+                item.put("diskGb", String.valueOf(flavor.getDisk()));
+                result.add(item);
+            }
+        } catch (RuntimeException e) {
+            throw e;
+        }
+        return result;
     }
 
     private void check(ActionResponse response, String action) {

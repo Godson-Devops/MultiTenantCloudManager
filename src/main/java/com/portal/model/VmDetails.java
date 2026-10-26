@@ -19,6 +19,7 @@ public class VmDetails {
     public Map<String, Object> toMap() {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("vmId", vmId);
+        map.put("userId", userId);
         map.put("vmName", vmName);
         map.put("status", status);
         map.put("projectName", projectName);

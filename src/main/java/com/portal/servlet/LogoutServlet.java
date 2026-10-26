@@ -14,6 +14,9 @@ public class LogoutServlet extends BaseServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
+        if (!requireCsrf(request, response)) {
+            return;
+        }
         HttpSession session = request.getSession(false);
         if (session != null) {
             session.invalidate();

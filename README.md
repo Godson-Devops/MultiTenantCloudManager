@@ -74,6 +74,8 @@ overridden by an environment variable: upper-case the key and replace `.` with
 | `MYSQL_URL` | default `jdbc:mysql://localhost:3306/cloudportal` |
 | `MYSQL_USER`, `MYSQL_PASSWORD` | database credentials, default `root` / empty |
 | `QUOTA_DEFAULT_MAX_VM`, `QUOTA_DEFAULT_MAX_POD` | defaults for new accounts |
+| `ADMIN_USERS` | comma-separated user ids that may open the admin views; empty disables them |
+| `ADMIN_BOOTSTRAP_USER`, `ADMIN_BOOTSTRAP_PASSWORD` | account created once at startup if missing; empty skips seeding |
 | `SYNC_PERIOD_SECONDS` | reconciliation interval, default `30` |
 | `OPENSTACK_AUTH_URL`, `OPENSTACK_USERNAME`, `OPENSTACK_PASSWORD` | required to create VMs |
 | `OPENSTACK_DOMAIN`, `OPENSTACK_PROJECT` | default `Default` / `service` |
@@ -103,6 +105,15 @@ user answers `403`.
 | GET | `/pod/list`, `/pod/details`, `/pod/metrics` | read pods and their metrics |
 | POST | `/pod/action` | start / stop / restart / delete |
 | GET | `/pod/logs` | stream pod logs as Server-Sent Events |
+| GET | `/admin/vm/list` | every user's VMs — admin only |
+| GET | `/admin/pod/list` | every user's pods — admin only |
+
+A user whose id is in `ADMIN_USERS` also sees every user's VMs and pods,
+through the admin dashboards and the two endpoints above; `403` is returned to
+anyone else. Admin detail, metrics and pod-log reads (`/vm/details`,
+`/pod/details`, `/vm/metrics`, `/pod/metrics`, `/pod/logs`) are unscoped as
+well, and admins may start, stop, restart or delete any user's VM through
+`/vm/action`.
 
 `429` means the caller exceeded the login rate limit (10 attempts a minute per
 address). `409` means the name is already taken.
@@ -122,13 +133,13 @@ row is inconsistent, and saying so beats guessing a state the UI cannot render.
 
 ```
 src/main/java/com/portal/
-  servlet/   15 servlets: HTTP in, JSON out, session and ownership checks
+  servlet/   17 servlets: HTTP in, JSON out, session and ownership checks
   dao/       MySQL access (users, vm_table, pod_table) and schema creation
   model/     User, VmDetails, PodDetails, Status
   service/   OpenStackService, KubernetesService, PrometheusService, ServiceRegistry
   util/      JdbcConnection, AppConfig
   listener/  SyncWorkerListener: schema creation + reconciliation worker
-src/main/webapp/   11 JSP pages and js/portal.js
+src/main/webapp/   13 JSP pages and js/portal.js
 ```
 
 Provider clients are built once by `ServiceRegistry` and shared; a client that is

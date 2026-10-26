@@ -19,6 +19,7 @@ public class PodDetails {
     public Map<String, Object> toMap() {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("podId", podId);
+        map.put("userId", userId);
         map.put("podName", podName);
         map.put("namespace", namespace);
         map.put("nodeName", nodeName);

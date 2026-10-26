@@ -4,6 +4,7 @@ import com.portal.dao.VmDao;
 import com.portal.model.VmDetails;
 import com.portal.service.PrometheusService;
 import com.portal.service.ServiceRegistry;
+import com.portal.util.AdminUsers;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -34,8 +35,14 @@ public class VmMetricsServlet extends BaseServlet {
             return;
         }
 
-        VmDetails vm = vmDao.findByIdAndUser(vmId, userId);
-        if (!requireOwned(vm, VmDetails::getUserId, userId, response)) {
+        boolean admin = AdminUsers.isAdmin(userId);
+        VmDetails vm = admin ? vmDao.findById(vmId) : vmDao.findByIdAndUser(vmId, userId);
+        if (admin) {
+            if (vm == null) {
+                sendError(response, HttpServletResponse.SC_NOT_FOUND, "VM not found");
+                return;
+            }
+        } else if (!requireOwned(vm, VmDetails::getUserId, userId, response)) {
             return;
         }
 
@@ -43,25 +50,38 @@ public class VmMetricsServlet extends BaseServlet {
         body.put("vmId", vmId);
 
         String vmIp = vm.getVmIp();
-        if (vmIp == null || vmIp.isBlank()) {
+        String floatIp = null;
+        try {
+            floatIp = vm.getFloatIp();
+        } catch (Exception ignored) {
+        }
+        String scrapeIp = null;
+        if (vmIp != null && !vmIp.isBlank()) {
+            scrapeIp = vmIp;
+        } else if (floatIp != null && !floatIp.isBlank()) {
+            scrapeIp = floatIp;
+        }
+        if (scrapeIp == null || scrapeIp.isBlank()) {
             body.put("error", UNAVAILABLE);
-            body.put("reason", "VM has no private IP yet");
+            body.put("reason", "VM has no IP yet");
             sendOk(response, body);
             return;
         }
 
+        long windowSeconds = PrometheusService.parseWindow(param(request, "range"));
         PrometheusService prometheus = ServiceRegistry.prometheus();
-        List<double[]> cpu = prometheus.queryVmCpu(vmIp);
-        List<double[]> memory = prometheus.queryVmMemory(vmIp);
-        List<double[]> disk = prometheus.queryVmDisk(vmIp);
-        List<double[]> network = prometheus.queryVmNetwork(vmIp);
+        List<double[]> cpu = prometheus.queryVmCpu(scrapeIp, windowSeconds);
+        List<double[]> memory = prometheus.queryVmMemory(scrapeIp, windowSeconds);
+        List<double[]> disk = prometheus.queryVmDisk(scrapeIp, windowSeconds);
+        List<double[]> network = prometheus.queryVmNetwork(scrapeIp, windowSeconds);
 
-        body.put("instance", prometheus.nodeExporterInstance(vmIp));
+        body.put("windowSeconds", windowSeconds);
+        body.put("instance", prometheus.nodeExporterInstance(scrapeIp));
         body.put("cpu", cpu);
         body.put("memory", memory);
         body.put("disk", disk);
         body.put("network", network);
-        body.put("up", prometheus.queryVmUp(vmIp));
+        body.put("up", prometheus.queryVmUp(scrapeIp));
 
         if (cpu.isEmpty() && memory.isEmpty() && disk.isEmpty() && network.isEmpty()) {
             body.put("error", UNAVAILABLE);

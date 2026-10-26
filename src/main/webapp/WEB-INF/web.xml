@@ -83,6 +83,24 @@
   </servlet-mapping>
 
   <servlet>
+    <servlet-name>ImageListServlet</servlet-name>
+    <servlet-class>com.portal.servlet.ImageListServlet</servlet-class>
+  </servlet>
+  <servlet-mapping>
+    <servlet-name>ImageListServlet</servlet-name>
+    <url-pattern>/images/list</url-pattern>
+  </servlet-mapping>
+
+  <servlet>
+    <servlet-name>FlavorListServlet</servlet-name>
+    <servlet-class>com.portal.servlet.FlavorListServlet</servlet-class>
+  </servlet>
+  <servlet-mapping>
+    <servlet-name>FlavorListServlet</servlet-name>
+    <url-pattern>/flavors/list</url-pattern>
+  </servlet-mapping>
+
+  <servlet>
     <servlet-name>PodCreateServlet</servlet-name>
     <servlet-class>com.portal.servlet.PodCreateServlet</servlet-class>
   </servlet>
@@ -134,6 +152,24 @@
   <servlet-mapping>
     <servlet-name>PodLogsServlet</servlet-name>
     <url-pattern>/pod/logs</url-pattern>
+  </servlet-mapping>
+
+  <servlet>
+    <servlet-name>AdminVmListServlet</servlet-name>
+    <servlet-class>com.portal.servlet.AdminVmListServlet</servlet-class>
+  </servlet>
+  <servlet-mapping>
+    <servlet-name>AdminVmListServlet</servlet-name>
+    <url-pattern>/admin/vm/list</url-pattern>
+  </servlet-mapping>
+
+  <servlet>
+    <servlet-name>AdminPodListServlet</servlet-name>
+    <servlet-class>com.portal.servlet.AdminPodListServlet</servlet-class>
+  </servlet>
+  <servlet-mapping>
+    <servlet-name>AdminPodListServlet</servlet-name>
+    <url-pattern>/admin/pod/list</url-pattern>
   </servlet-mapping>
 
   <session-config>
